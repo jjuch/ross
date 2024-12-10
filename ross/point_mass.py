@@ -618,3 +618,10 @@ def point_mass_example_6dof():
     mz = 3.0
     point_mass = PointMass6DoF(n=n, mx=mx, my=my, mz=mz, tag="pointmass")
     return point_mass
+
+if __name__ == "__main__":
+    pm = point_mass_example()
+    print("Point mass: ", pm)
+
+    pm6 = point_mass_example_6dof()
+    print("Point mass 6DOF: ", pm6)

@@ -639,3 +639,9 @@ def two_shaft_rotor_example():
         orientation_angle=0.0,
         position="below",
     )
+
+
+if __name__ == "__main__":
+    twinRotor = two_shaft_rotor_example()
+    fig = twinRotor.plot_rotor()
+    fig.show()
