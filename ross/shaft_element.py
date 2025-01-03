@@ -158,6 +158,7 @@ class ShaftElement(Element):
         alpha=0,
         beta=0,
     ):
+
         if idr is None:
             idr = idl
         if odr is None:
