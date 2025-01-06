@@ -221,7 +221,7 @@ class ScrewElement(ShaftElement6DoF):
         self.slenderness_ratio = sld
 
         # Moment of inertia
-        self.Im = self.polar_moment_of_inertia(polar=True)
+        self.Im = self.polar_moment_of_inertia()
 
         # picking a method to calculate the shear coefficient
         # List of avaible methods:
@@ -394,6 +394,27 @@ class ScrewElement(ShaftElement6DoF):
             return sh.LineString([[r_min_ext * np.cos(theta), r_min_ext * np.sin(theta)], [r_max_ext*np.cos(theta), r_max_ext * np.sin(theta)]])
         
 
+        def filter_crossings(cross, eps=1e-4):
+            # [__integral_over_distance_squared] Check whether there are no small numerical artefacts that causes the multiple-crossings 
+            # algorithm. The parameter eps determines the threshold to remove artefacts. 
+            if type(cross) is MultiLineString:
+                lines = []
+                for c in cross.geoms:
+                    x_c, y_c = c.xy
+                    dx = abs(x_c[1] - x_c[0])
+                    dy = abs(y_c[1] - y_c[0])
+                    if not (dx < eps and dy < eps):
+                        line = [[x_c[0], y_c[0]], [x_c[1], y_c[1]]]
+                        lines.append(line)
+
+                if len(lines) == 1:
+                    return LineString(lines[0])
+                else:
+                    return MultiLineString(lines)
+            else:
+                return cross
+
+
         def new_intersection(theta, eps=np.pi/180):
             # [__integral_over_distance_squared] If a new distant area is found that is radially disconnected from the 
             # previous part along a single angle, the radial and angle's bounds are 
@@ -402,7 +423,7 @@ class ScrewElement(ShaftElement6DoF):
             # from theta - eps, with eps a small value.
             theta_min = theta - eps
             th = np.arange(theta_min, 2*np.pi + theta_min, 0.01*np.pi/180)
-
+            
             # Initialise
             r_min_new = r_min * 0.9
             theta_bounds = [0, 0]
@@ -412,7 +433,7 @@ class ScrewElement(ShaftElement6DoF):
                 # Make full circle and check where the radially disconnected area starts and ends 
                 # by drawing a radial line and observing the number of crossings.
                 l = create_line(r_min, thi)
-                c = self.crossSection.intersection(l)
+                c = filter_crossings(self.crossSection.intersection(l), eps=r_max/1e4)
 
                 if type(c) is MultiLineString and not crossed_bool:
                     # A new radially disconnected area is observed
@@ -457,7 +478,7 @@ class ScrewElement(ShaftElement6DoF):
 
             # Find the intersections for a certain angle theta between r_min and r_max
             line = create_line(r_min, theta)
-            cross = self.crossSection.intersection(line)
+            cross = filter_crossings(self.crossSection.intersection(line), eps=r_max/1e4)
             number_of_lines = len(cross.geoms) if type(cross) is MultiLineString else 1 # Number of crossings
             if number_of_lines > number_of_lines_prev:
                 # There is an increase of number of crossings
@@ -468,7 +489,7 @@ class ScrewElement(ShaftElement6DoF):
                     # extra intersection so recursive integrate
                     intersect, theta_bounds = new_intersection(theta)
                     theta_list.append(theta_bounds)
-                    integ_prev = self.__integral_over_distance_squared(intersect, theta_bounds, niveau = niveau + 1)
+                    integ_prev = self.__integral_over_distance_squared(intersect, theta_bounds, niveau = niveau + 1, debug=debug)
                     if debug:
                         print("r_min: ", intersect, " | theta: ", theta_bounds, " | integ_prev: ", integ_prev)
                 integ_add += integ_prev
@@ -505,7 +526,7 @@ class ScrewElement(ShaftElement6DoF):
 
     def polar_moment_of_inertia(self):
         # Calculate the polar moment of inertia Im.
-        integ = self.__integral_over_distance_squared()
+        integ = self.__integral_over_distance_squared(debug=False)
         return integ * self.m / self.volume * self.L
     
 
@@ -520,4 +541,6 @@ class ScrewElement(ShaftElement6DoF):
                 mode="lines"
             )
         )
+        fig.update_yaxes(scaleanchor = "x", # These yaxis settings ensure that the circle is non-deformed
+                            scaleratio = 1)
         fig.show()
