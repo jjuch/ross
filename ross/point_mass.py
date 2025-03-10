@@ -141,7 +141,7 @@ class PointMass(Element):
             f"\nNode:             {self.n}"
             f"\nMass X dir. (kg): {self.mx:{2}.{5}}"
             f"\nMass Y dir. (kg): {self.my:{2}.{5}}"
-            f"\nMass Z dir. (kg): {self.mz:{2}.{5}}"
+            f"\nMass Z dir. (kg): {self.my:{2}.{5}}"
         )
 
     def M(self):
@@ -156,20 +156,20 @@ class PointMass(Element):
 
         Examples
         --------
-        >>> p1 = PointMass(n=0, mx=2, my=3, mz=4)
+        >>> p1 = PointMass(n=0, mx=2, my=3)
         >>> p1.M()
-        array([[2., 0., 0.],
-               [0., 3., 0.],
-               [0., 0., 4.]])
+        array([[2., 0.],
+               [0., 3.]])
         """
         mx = self.mx
         my = self.my
         mz = self.mz
         # fmt: off
-        M = np.array([[mx,  0,  0],
-                      [ 0, my,  0],
-                      [ 0,  0, mz]])
+        M = np.array([[mx, 0, 0],
+                      [0, my, 0],
+                      [0, 0, mz]])
         # fmt: on
+
         return M
 
     def C(self):
