@@ -8,6 +8,7 @@ import inspect
 from abc import ABC
 from collections.abc import Iterable
 from pathlib import Path
+from tracemalloc import start
 from warnings import warn
 
 import numpy as np
@@ -392,6 +393,7 @@ class Shape(Results):
         shaft_elements_length,
         number_dof,
         normalize=False,
+        start_idx=0,
     ):
         self.vector = vector
         self.nodes = nodes
@@ -399,6 +401,7 @@ class Shape(Results):
         self.shaft_elements_length = shaft_elements_length
         self.normalize = normalize
         self.number_dof = number_dof
+        self.start_idx = start_idx
         evec = np.copy(vector)
 
         if self.normalize:
@@ -469,7 +472,7 @@ class Shape(Results):
         shaft_elements_length = self.shaft_elements_length
         nodes_pos = self.nodes_pos
         num_dof = self.number_dof
-
+        
         # calculate each orbit
         self._calculate_orbits()
 
@@ -497,11 +500,12 @@ class Shape(Results):
         N4 = -(zeta**2) + zeta**3
 
         for Le, n in zip(shaft_elements_length, nodes):
-            node_pos = nodes_pos[n]
+            node_pos = nodes_pos[n - self.start_idx]
+
             Nx = np.hstack((N1, Le * N2, N3, Le * N4))
             Ny = np.hstack((N1, -Le * N2, N3, -Le * N4))
 
-            ind = num_dof * n
+            ind = num_dof * (n - self.start_idx)
             xx = [
                 ind + 0,
                 ind + int(num_dof / 2) + 1,
@@ -515,9 +519,9 @@ class Shape(Results):
                 ind + int(3 * num_dof / 2) + 0,
             ]
 
-            pos0 = nn * n
-            pos1 = nn * (n + 1)
-
+            pos0 = nn * (n - self.start_idx)
+            pos1 = nn * ((n - self.start_idx) + 1)
+            
             xn[pos0:pos1] = Nx @ evec[xx].real
             yn[pos0:pos1] = Ny @ evec[yy].real
             zn[pos0:pos1] = (node_pos * onn + Le * zeta).reshape(nn)
@@ -1004,6 +1008,8 @@ class Shape(Results):
         phase_units="rad",
         animation=False,
         fig=None,
+        row=1,
+        col=1,
         **kwargs,
     ):
         if fig is None:
@@ -1069,7 +1075,7 @@ class Shape(Results):
                             + "X - Displacement: %{y:.2f}<br>"
                             + "Y - Displacement: %{z:.2f}"
                         ),
-                    )
+                    ), row=row, col=col
                 )
                 # add orbit major axis marker
                 fig.add_trace(
@@ -1095,7 +1101,7 @@ class Shape(Results):
                             + "Major axis: %{customdata[0]:.2f}<br>"
                             + "Angle: %{customdata[1]:.2f}"
                         ),
-                    )
+                    ), row=row, col=col
                 )
                 first_orbit = False
 
@@ -1109,7 +1115,7 @@ class Shape(Results):
                     line=dict(color="black", dash="dash"),
                     name="mode shape",
                     showlegend=False,
-                )
+                ), row=row, col=col
             )
 
             # plot center line
@@ -1125,7 +1131,7 @@ class Shape(Results):
                     line=dict(color="black", dash="dashdot"),
                     hoverinfo="none",
                     showlegend=False,
-                )
+                ), row=row, col=col
             )
 
             # plot major axis line
@@ -1139,11 +1145,11 @@ class Shape(Results):
                     hoverinfo="none",
                     legendgroup="major_axis",
                     showlegend=False,
-                )
+                ), row=row, col=col
             )
 
-        fig.update_layout(
-            scene=dict(
+        fig.update_scenes(
+            dict(
                 aspectratio=dict(x=2.5, y=1, z=1),
                 camera=dict(
                     eye=dict(x=2.3, y=1.5, z=0.5),
@@ -1151,6 +1157,7 @@ class Shape(Results):
                     up=dict(x=0, y=0, z=1),
                 ),
             ),
+            row=row, col=col,
             **kwargs,
         )
 
@@ -1261,6 +1268,7 @@ class ModalResults(Results):
         nodes_pos,
         shaft_elements_length,
         number_dof,
+        start_nodes_multirotor
     ):
         self.speed = speed
         self.evalues = evalues
@@ -1274,22 +1282,39 @@ class ModalResults(Results):
         self.nodes_pos = nodes_pos
         self.shaft_elements_length = shaft_elements_length
         self.number_dof = number_dof
+        self.start_nodes_multirotor=start_nodes_multirotor
         self.update_mode_shapes()
-
+       
     def update_mode_shapes(self):
         self.modes = self.evectors[: self.ndof]
-        self.shapes = []
+        self.shapes = np.ndarray((len(self.wn), len(self.start_nodes_multirotor)), dtype='object')
+        
         for mode in range(len(self.wn)):
-            self.shapes.append(
-                Shape(
-                    vector=self.modes[:, mode],
-                    nodes=self.nodes,
-                    nodes_pos=self.nodes_pos,
-                    shaft_elements_length=self.shaft_elements_length,
-                    normalize=True,
-                    number_dof=self.number_dof,
-                )
-            )
+            shaft_elements_length = self.shaft_elements_length
+            for i, idx in enumerate(self.start_nodes_multirotor):
+                start_idx = idx
+                stop_idx = None if i == len(self.start_nodes_multirotor) - 1 else self.start_nodes_multirotor[i + 1]
+                
+                self.shapes[mode, i] = Shape(
+                        vector = self.modes[:, mode],
+                        nodes=self.nodes[start_idx:stop_idx],
+                        nodes_pos=self.nodes_pos[start_idx:stop_idx],
+                        shaft_elements_length=shaft_elements_length[start_idx:None if stop_idx is None else stop_idx - 1],
+                        normalize=True,
+                        number_dof=self.number_dof,
+                        start_idx=start_idx
+                    )
+                
+                shaft_elements_length = np.insert(shaft_elements_length, -1 if stop_idx is None else stop_idx - 1, 0.0)
+            # self.shapes[mode, 0] = Shape(
+            #             vector = self.modes[:, mode],
+            #             nodes=self.nodes,
+            #             nodes_pos=self.nodes_pos,
+            #             shaft_elements_length=self.shaft_elements_length,
+            #             normalize=True,
+            #             number_dof=self.number_dof,
+            #         )
+
 
     @staticmethod
     @np.vectorize
@@ -1395,7 +1420,7 @@ class ModalResults(Results):
         kappa_mode = [orb.kappa for orb in self.shapes[w].orbits]
         return kappa_mode
 
-    def whirl_direction(self):
+    def whirl_direction(self, rotor=0):
         r"""Get the whirl direction for each frequency.
 
         Returns
@@ -1406,7 +1431,7 @@ class ModalResults(Results):
             None if it does not correspond to a Lateral mode (e.g. Torsional or Axial).
         """
         # whirl direction/values are methods because they are expensive.
-        whirl_w = [self.shapes[wd].whirl for wd in range(len(self.wd))]
+        whirl_w = [self.shapes[wd, rotor].whirl for wd in range(len(self.wd))]
 
         return np.array(whirl_w)
 
@@ -1429,6 +1454,7 @@ class ModalResults(Results):
         length_units="m",
         frequency_units="rad/s",
         damping_parameter="log_dec",
+        rotor=0
     ):
         """Return the mode shapes in DataFrame format.
 
@@ -1442,6 +1468,8 @@ class ModalResults(Results):
         damping_parameter : str, optional
             Define which value to show for damping. We can use "log_dec" or "damping_ratio".
             Default is "log_dec".
+        rotor : int, optional
+            Get the mode shape of a single rotor from the a multirotor object.
 
         Returns
         -------
@@ -1463,7 +1491,7 @@ class ModalResults(Results):
         data["speed"] = Q_(self.speed, "rad/s").to(frequency_units).m
 
         data[mode] = {}
-        for _key, _values in self.shapes[mode].__dict__.items():
+        for _key, _values in self.shapes[mode, rotor].__dict__.items():
             data[mode][_key] = _values
 
         df = pd.DataFrame(data)
@@ -1525,63 +1553,54 @@ class ModalResults(Results):
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
         """
+        number_of_rotors = self.shapes.shape[1]
         if fig is None:
-            fig = go.Figure()
+            fig = make_subplots(rows=number_of_rotors, cols=1, specs=[[{'type': 'scatter3d'}]] * number_of_rotors, subplot_titles=["Rotor {}".format(i + 1) for i in range(number_of_rotors)])
 
-        df = self.data_mode(mode, length_units, frequency_units, damping_parameter)
+        layout_dict = dict()
+        kwargs_dict = {'margin': {'b': 60, 'l': 40, 'r': 40, 't': 60}}             
+        fig.update_layout(layout_dict, overwrite=False, **kwargs_dict)
 
-        damping_name = df["damping_name"].values[0]
-        damping_value = df["damping_value"].values[0]
+        for i in range(number_of_rotors):
+            layout_dict = dict()
+            kwargs_dict = dict()
+            df = self.data_mode(mode, length_units, frequency_units, damping_parameter, rotor=i)
 
-        wd = df["wd"].values
-        wn = df["wn"].values
-        speed = df["speed"].values
+            damping_name = df["damping_name"].values[0]
+            damping_value = df["damping_value"].values[0]
 
-        frequency = {
-            "wd": f"ω<sub>d</sub> = {wd[0]:.2f}",
-            "wn": f"ω<sub>n</sub> = {wn[0]:.2f}",
-            "speed": f"Speed = {speed[0]:.2f}",
-        }
+            wd = df["wd"].values
+            wn = df["wn"].values
+            speed = df["speed"].values
 
-        shape = self.shapes[mode]
-        fig = shape.plot_3d(
-            length_units=length_units,
-            phase_units=phase_units,
-            animation=animation,
-            fig=fig,
-        )
+            frequency = {
+                "wd": f"ω<sub>d</sub> = {wd[0]:.2f}",
+                "wn": f"ω<sub>n</sub> = {wn[0]:.2f}",
+                "speed": f"Speed = {speed[0]:.2f}",
+            }
 
-        if title is None:
-            title = ""
+        
+            shape = self.shapes[mode, i]
+            fig = shape.plot_3d(
+                length_units=length_units,
+                phase_units=phase_units,
+                animation=animation,
+                fig=fig,
+                row=(i + 1),
+                col=1
+            )
 
-        mode_type = (
-            f"whirl: {self.whirl_direction()[mode]}"
-            if shape.mode_type == "Lateral"
-            else f"{shape.mode_type} mode"
-        )
+            if title is None:
+                title = ""
 
+            mode_type = (
+                f"whirl: {self.whirl_direction(rotor=i)[mode]}"
+                if shape.mode_type == "Lateral"
+                else f"{shape.mode_type} mode"
+            )
+        
         fig.update_layout(
-            margin=dict(b=60, l=40, r=40, t=60),
-            scene=dict(
-                xaxis=dict(
-                    title=dict(text=f"Rotor Length ({length_units})"),
-                    autorange="reversed",
-                    nticks=5,
-                ),
-                yaxis=dict(
-                    title=dict(text="Relative Displacement"), range=[-2, 2], nticks=5
-                ),
-                zaxis=dict(
-                    title=dict(text="Relative Displacement"), range=[-2, 2], nticks=5
-                ),
-                aspectmode="manual",
-                aspectratio=dict(x=2.5, y=1, z=1),
-                camera=dict(
-                    eye=dict(x=2.3, y=1.5, z=0.5),
-                    center=dict(x=1.15, y=0.5, z=0),
-                    up=dict(x=0, y=0, z=1),
-                ),
-            ),
+            margin=dict(b=60, l=40, r=40, t=85),
             legend=dict(x=0.85, y=0.95),
             title=dict(
                 text=(

@@ -3,7 +3,7 @@ from re import search
 from copy import deepcopy as copy
 
 import ross as rs
-from ross.gear_element import GearElement
+from ross.gear_element import GearElement, GearElement6DoF
 from ross.rotor_assembly import Rotor
 
 __all__ = ["MultiRotor"]
@@ -126,12 +126,12 @@ class MultiRotor(Rotor):
         gear_1 = [
             elm
             for elm in R1.disk_elements
-            if elm.n == coupled_nodes[0] and type(elm) == GearElement
+            if elm.n == coupled_nodes[0] and isinstance(elm, (GearElement, GearElement6DoF))
         ]
         gear_2 = [
             elm
             for elm in R2.disk_elements
-            if elm.n == coupled_nodes[1] and type(elm) == GearElement
+            if elm.n == coupled_nodes[1] and isinstance(elm, (GearElement, GearElement6DoF))
         ]
         if len(gear_1) == 0 or len(gear_2) == 0:
             raise TypeError("Each rotor needs a GearElement in the coupled nodes!")
@@ -193,6 +193,9 @@ class MultiRotor(Rotor):
         bearing_elements = [*R1.bearing_elements, *R2.bearing_elements]
         point_mass_elements = [*R1.point_mass_elements, *R2.point_mass_elements]
 
+        self.start_nodes_multirotor = driving_rotor.start_nodes_multirotor
+        self.start_nodes_multirotor.extend([d_start + driving_rotor.nodes[-1] + 1 for d_start in driven_rotor.start_nodes_multirotor])
+        
         super().__init__(
             shaft_elements,
             disk_elements,

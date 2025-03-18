@@ -28,6 +28,7 @@ from ross.bearing_seal_element import (
 )
 from ross.faults import Crack, MisalignmentFlex, MisalignmentRigid, Rubbing
 from ross.disk_element import DiskElement
+from ross.gear_element import GearElement, GearElement6DoF
 from ross.coupling_element import CouplingElement
 from ross.materials import Material, steel
 from ross.point_mass import PointMass
@@ -150,6 +151,9 @@ class Rotor(object):
             self.tag = "MultiRotor 0" if isMultiRotor else "Rotor 0"
         else:
             self.tag = tag
+
+        if not isMultiRotor:
+            self.start_nodes_multirotor = [0]
 
         ####################################################
         # Config attributes
@@ -824,6 +828,7 @@ class Rotor(object):
             self.nodes_pos,
             self.shaft_elements_length,
             self.number_dof,
+            self.start_nodes_multirotor
         )
 
         return modal_results
@@ -1660,6 +1665,11 @@ class Rotor(object):
         vector_from_modal = lambda array: modal_matrix @ array
 
         return matrix_to_modal, vector_to_modal, vector_from_modal
+
+
+    def coupling_nodes(self):
+        return [d.n for d in self.disk_elements if isinstance(d, (GearElement, GearElement6DoF))]
+
 
     def transfer_matrix(self, speed=None, frequency=None, modes=None):
         """Calculate the fer matrix for the frequency response function (FRF).
