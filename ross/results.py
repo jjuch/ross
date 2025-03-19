@@ -20,6 +20,7 @@ from plotly.subplots import make_subplots
 from scipy import linalg as la
 
 from ross.plotly_theme import tableau_colors, coolwarm_r
+from ross.tests.test_misalignment import rotor
 from ross.units import Q_, check_units
 from ross.utils import intersection
 
@@ -333,9 +334,9 @@ class Orbit(Results):
 
         return amplitude, phase
 
-    def plot_orbit(self, fig=None):
+    def plot_orbit(self, fig=None, row=1, col=1):
         if fig is None:
-            fig = go.Figure()
+            fig = make_subplots(rows=row, cols=col)
 
         xc = self.x_circle
         yc = self.y_circle
@@ -348,7 +349,7 @@ class Orbit(Results):
                 line=dict(color=self.color),
                 name=f"node {self.node}<br>{self.whirl}",
                 showlegend=False,
-            )
+            ), row=row, col=col
         )
 
         fig.add_trace(
@@ -359,7 +360,7 @@ class Orbit(Results):
                 marker=dict(color=self.color),
                 name="node {}".format(self.node),
                 showlegend=False,
-            )
+            ), row=row, col=col
         )
 
         return fig
@@ -544,7 +545,7 @@ class Shape(Results):
         self.major_y = major_y
         self.major_angle = major_angle
 
-    def plot_orbit(self, nodes, fig=None):
+    def plot_orbit(self, nodes, fig=None, row=1, col=1):
         """Plot orbits.
 
         Parameters
@@ -561,12 +562,12 @@ class Shape(Results):
         """
         # only perform calculation if necessary
         if fig is None:
-            fig = go.Figure()
+            fig = make_subplots(rows=row, cols=col)
 
         selected_orbits = [orbit for orbit in self.orbits if orbit.node in nodes]
 
         for orbit in selected_orbits:
-            fig = orbit.plot_orbit(fig=fig)
+            fig = orbit.plot_orbit(fig=fig, row=row, col=col)
 
         return fig
 
@@ -918,7 +919,7 @@ class Shape(Results):
         return fig
 
     def plot_2d(
-        self, orientation="major", length_units="m", phase_units="rad", fig=None
+        self, orientation="major", length_units="m", phase_units="rad", row=1, col=1, fig=None
     ):
         """Rotor shape 2d plot.
 
@@ -935,6 +936,12 @@ class Shape(Results):
             Default is "rad"
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
+        row : int
+            Row number of subplot.
+            Default is 1
+        col : int
+            Column number of subplot.
+            Default is 1
 
         Returns
         -------
@@ -978,7 +985,7 @@ class Shape(Results):
                         f"Displacement: %{{y:.2f}}<br>"
                         + f"Angle {phase_units}: %{{customdata:.2f}}"
                     ),
-                ),
+                ), row=row, col=col
             )
 
             # plot center line
@@ -991,11 +998,11 @@ class Shape(Results):
                     name="centerline",
                     hoverinfo="none",
                     showlegend=False,
-                )
+                ), row=row, col=col
             )
 
-            fig.update_xaxes(title_text=f"Rotor Length ({length_units})")
-            fig.update_yaxes(title_text="Relative Displacement")
+            fig.update_xaxes(title_text=f"Rotor Length ({length_units})", row=row, col=col)
+            fig.update_yaxes(title_text="Relative Displacement", row=row, col=col)
 
         return fig
 
@@ -1055,8 +1062,8 @@ class Shape(Results):
                         showlegend=False,
                         hovertemplate=(
                             "Nodal Position: %{x:.2f}<br>"
-                            + "X - Displacement: %{y:.2f}<br>"
-                            + "Y - Displacement: %{z:.2f}"
+                            + "X - Displacement: %{y:.2e}<br>"
+                            + "Y - Displacement: %{z:.2e}"
                         ),
                     )
                 )
@@ -1072,8 +1079,8 @@ class Shape(Results):
                         showlegend=False,
                         hovertemplate=(
                             "Nodal Position: %{x:.2f}<br>"
-                            + "X - Displacement: %{y:.2f}<br>"
-                            + "Y - Displacement: %{z:.2f}"
+                            + "X - Displacement: %{y:.2e}<br>"
+                            + "Y - Displacement: %{z:.2e}"
                         ),
                     ), row=row, col=col
                 )
@@ -1306,14 +1313,6 @@ class ModalResults(Results):
                     )
                 
                 shaft_elements_length = np.insert(shaft_elements_length, -1 if stop_idx is None else stop_idx - 1, 0.0)
-            # self.shapes[mode, 0] = Shape(
-            #             vector = self.modes[:, mode],
-            #             nodes=self.nodes,
-            #             nodes_pos=self.nodes_pos,
-            #             shaft_elements_length=self.shaft_elements_length,
-            #             normalize=True,
-            #             number_dof=self.number_dof,
-            #         )
 
 
     @staticmethod
@@ -1555,15 +1554,17 @@ class ModalResults(Results):
         """
         number_of_rotors = self.shapes.shape[1]
         if fig is None:
-            fig = make_subplots(rows=number_of_rotors, cols=1, specs=[[{'type': 'scatter3d'}]] * number_of_rotors, subplot_titles=["Rotor {}".format(i + 1) for i in range(number_of_rotors)])
+            fig = make_subplots(rows=number_of_rotors, 
+                                cols=1, 
+                                specs=[[{'type': 'scatter3d'}]] * number_of_rotors, 
+                                subplot_titles=["Rotor {}".format(i + 1) for i in range(number_of_rotors)]
+                                )
 
         layout_dict = dict()
         kwargs_dict = {'margin': {'b': 60, 'l': 40, 'r': 40, 't': 60}}             
         fig.update_layout(layout_dict, overwrite=False, **kwargs_dict)
 
         for i in range(number_of_rotors):
-            layout_dict = dict()
-            kwargs_dict = dict()
             df = self.data_mode(mode, length_units, frequency_units, damping_parameter, rotor=i)
 
             damping_name = df["damping_name"].values[0]
@@ -1669,36 +1670,52 @@ class ModalResults(Results):
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
         """
-
-        df = self.data_mode(mode, length_units, frequency_units, damping_parameter)
-
-        damping_name = df["damping_name"].values[0]
-        damping_value = df["damping_value"].values[0]
-
+        number_of_rotors = self.shapes.shape[1]
         if fig is None:
-            fig = go.Figure()
+            fig = make_subplots(rows=number_of_rotors, 
+                                cols=1, 
+                                specs=[[{'type': 'scatter'}]] * number_of_rotors,
+                                subplot_titles=["Rotor {}".format(i + 1) for i in range(number_of_rotors)]
+                                )
 
-        wd = df["wd"].values
-        wn = df["wn"].values
-        speed = df["speed"].values
+        layout_dict = dict()
+        kwargs_dict = {'margin': {'b': 60, 'l': 40, 'r': 40, 't': 60}}             
+        fig.update_layout(layout_dict, overwrite=False, **kwargs_dict)
 
-        frequency = {
-            "wd": f"ω<sub>d</sub> = {wd[0]:.2f}",
-            "wn": f"ω<sub>n</sub> = {wn[0]:.2f}",
-            "speed": f"Speed = {speed[0]:.2f}",
-        }
+        for i in range(number_of_rotors):
 
-        shape = self.shapes[mode]
-        fig = shape.plot_2d(fig=fig, orientation=orientation)
+            df = self.data_mode(mode, length_units, frequency_units, damping_parameter, rotor=i)
 
-        if title is None:
-            title = ""
+            damping_name = df["damping_name"].values[0]
+            damping_value = df["damping_value"].values[0]
 
-        mode_type = (
-            f"whirl: {self.whirl_direction()[mode]}"
-            if shape.mode_type == "Lateral"
-            else f"{shape.mode_type} mode"
-        )
+            
+
+            wd = df["wd"].values
+            wn = df["wn"].values
+            speed = df["speed"].values
+
+            frequency = {
+                "wd": f"ω<sub>d</sub> = {wd[0]:.2f}",
+                "wn": f"ω<sub>n</sub> = {wn[0]:.2f}",
+                "speed": f"Speed = {speed[0]:.2f}",
+            }
+
+            shape = self.shapes[mode, i]
+            fig = shape.plot_2d(
+                fig=fig, 
+                orientation=orientation,
+                row=i + 1,
+                col=1)
+
+            if title is None:
+                title = ""
+
+            mode_type = (
+                f"whirl: {self.whirl_direction(rotor=i)[mode]}"
+                if shape.mode_type == "Lateral"
+                else f"{shape.mode_type} mode"
+            )
 
         fig.update_layout(
             title=dict(
@@ -1722,6 +1739,7 @@ class ModalResults(Results):
         self,
         mode=None,
         nodes=None,
+        rotor=None,
         fig=None,
         frequency_type="wd",
         title=None,
@@ -1760,20 +1778,49 @@ class ModalResults(Results):
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
         """
-        if fig is None:
-            fig = go.Figure()
-
         # case where an int is given
         if not isinstance(nodes, Iterable):
             nodes = [nodes]
 
-        shape = self.shapes[mode]
-        fig = shape.plot_orbit(nodes, fig=fig)
+        number_of_rotors = self.shapes.shape[1]
+        max_rows = 5
+        total_nodes = len(nodes)
+        if total_nodes <= max_rows:
+            rows = total_nodes
+            cols = 1
+        else:
+            rows = max_rows
+            cols = int(np.ceil(total_nodes / max_rows))
+
+        if fig is None:
+            fig = make_subplots(rows=rows,
+                                cols=cols,
+                                specs=[[{'type': 'scatter'}] * cols] * rows
+                                # subplot_titles=["Rotor {}".format(i + 1) for i in range(number_of_rotors)]
+                                )
+
+
+        rotor_number = []
+        row = 1
+        col = 1
+        for i, n in enumerate(nodes):
+            for j in range(number_of_rotors):
+                if n in self.shapes[mode, j].nodes:
+                    rotor_number.append(j)
+            shape = self.shapes[mode, rotor_number[i]]
+            fig = shape.plot_orbit([n], 
+                                fig=fig, 
+                                row=row, 
+                                col=col)
+            row = row + 1
+            if row == max_rows + 1:
+                row = 1
+                col = col + 1
 
         fig.update_layout(
-            autosize=False,
-            width=500,
-            height=500,
+            autosize=True,
+            # width=500,
+            # height=500,
             xaxis_range=[-1, 1],
             yaxis_range=[-1, 1],
             title={
