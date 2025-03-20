@@ -334,7 +334,7 @@ class Orbit(Results):
 
         return amplitude, phase
 
-    def plot_orbit(self, fig=None, row=1, col=1):
+    def plot_orbit(self, fig=None, major_axis=False, middle_point=False, row=1, col=1):
         if fig is None:
             fig = make_subplots(rows=row, cols=col)
 
@@ -362,6 +362,55 @@ class Orbit(Results):
                 showlegend=False,
             ), row=row, col=col
         )
+
+        if major_axis:
+            # add orbit major axis marker
+            fig.add_trace(
+                go.Scatter(
+                    x=[self.major_x],
+                    y=[self.major_y],
+                    mode="markers",
+                    marker=dict(
+                        color="black", symbol="cross", size=4, line_width=2
+                    ),
+                    name="Major axis node {}".format(self.node),
+                    showlegend=True,
+                    legendgroup="major_axis_node_{}".format(self.node),
+                    customdata=np.array(
+                        [
+                            self.major_axis,
+                            Q_(self.major_angle, "rad").m,
+                        ]
+                    ).reshape(1, 2),
+                    hovertemplate=(
+                        "Nodal Position: %{x:.2f}<br>"
+                        + "Major axis: %{customdata[0]:.2f}<br>"
+                        + "Angle: %{customdata[1]:.2f}"
+                    ),
+                ), row=row, col=col
+            )
+
+        if middle_point:
+            # add orbit's middle point
+            x_mp = (max(xc) - min(xc))/2 + min(xc)
+            y_mp = (max(yc) - min(yc))/2 + min(yc)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=[x_mp],
+                    y=[y_mp],
+                    mode="markers",
+                    marker=dict(
+                        color="green", symbol="cross", size=4, line_width=2
+                    ),
+                    name="Middle point node {}".format(self.node),
+                    showlegend=True,
+                    legendgroup="middle_point_node_{}".format(self.node),
+                    hovertemplate=(
+                        "Nodal Position: %{x:.2e}, %{y:.2e}"
+                    ),
+                ), row=row, col=col
+            )
 
         return fig
 
@@ -507,12 +556,14 @@ class Shape(Results):
             Ny = np.hstack((N1, -Le * N2, N3, -Le * N4))
 
             ind = num_dof * (n - self.start_idx)
+            # [x[1], theta_y[1], x[2], theta_y[2]]
             xx = [
                 ind + 0,
                 ind + int(num_dof / 2) + 1,
                 ind + num_dof + 0,
                 ind + int(3 * num_dof / 2) + 1,
             ]
+            # [y[1], theta_x[1], y[2], theta_x[2]]
             yy = [
                 ind + 1,
                 ind + int(num_dof / 2) + 0,
@@ -523,11 +574,13 @@ class Shape(Results):
             pos0 = nn * (n - self.start_idx)
             pos1 = nn * ((n - self.start_idx) + 1)
             
+            # Only real part of eigenvector is retained in mode shape
             xn[pos0:pos1] = Nx @ evec[xx].real
             yn[pos0:pos1] = Ny @ evec[yy].real
             zn[pos0:pos1] = (node_pos * onn + Le * zeta).reshape(nn)
 
             # major axes calculation
+            # The entire eigenvector is retained in major axes calculation
             xn_complex[pos0:pos1] = Nx @ evec[xx]
             yn_complex[pos0:pos1] = Ny @ evec[yy]
             for i in range(pos0, pos1):
@@ -545,7 +598,7 @@ class Shape(Results):
         self.major_y = major_y
         self.major_angle = major_angle
 
-    def plot_orbit(self, nodes, fig=None, row=1, col=1):
+    def plot_orbit(self, nodes, fig=None, major_axis=False, middle_point=False, row=1, col=1):
         """Plot orbits.
 
         Parameters
@@ -554,6 +607,18 @@ class Shape(Results):
             List with nodes for which the orbits will be plotted.
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
+        major_axis : bool, optional
+            Plot the major axis point.
+            Default is False.
+        middle_point : bool, optional
+            Plot the middle point of the orbit.
+            Default is False.
+        row : int, optional
+            The row number in subplot figure.
+            Default is 1.
+        col : int, optional
+            The column number in subplot figure.
+            Default is 1.
 
         Returns
         -------
@@ -567,7 +632,7 @@ class Shape(Results):
         selected_orbits = [orbit for orbit in self.orbits if orbit.node in nodes]
 
         for orbit in selected_orbits:
-            fig = orbit.plot_orbit(fig=fig, row=row, col=col)
+            fig = orbit.plot_orbit(fig=fig, row=row, col=col, major_axis=major_axis, middle_point=middle_point)
 
         return fig
 
@@ -1065,7 +1130,7 @@ class Shape(Results):
                             + "X - Displacement: %{y:.2e}<br>"
                             + "Y - Displacement: %{z:.2e}"
                         ),
-                    )
+                    ), row=row, col=col
                 )
                 # add orbit start
                 fig.add_trace(
@@ -1094,9 +1159,9 @@ class Shape(Results):
                         marker=dict(
                             color="black", symbol="cross", size=4, line_width=2
                         ),
-                        name="Major axis",
+                        name="Major axis rotor {}".format(row),
                         showlegend=True if first_orbit else False,
-                        legendgroup="major_axis",
+                        legendgroup="major_axis_{}".format(row),
                         customdata=np.array(
                             [
                                 orbit.major_axis,
@@ -1119,7 +1184,7 @@ class Shape(Results):
                     y=xn,
                     z=yn,
                     mode="lines",
-                    line=dict(color="black", dash="dash"),
+                    line=dict(color="gray", dash="dash"),
                     name="mode shape",
                     showlegend=False,
                 ), row=row, col=col
@@ -1150,7 +1215,7 @@ class Shape(Results):
                     mode="lines",
                     line=dict(color="black", dash="dashdot"),
                     hoverinfo="none",
-                    legendgroup="major_axis",
+                    legendgroup="major_axis_{}".format(row),
                     showlegend=False,
                 ), row=row, col=col
             )
@@ -1739,8 +1804,9 @@ class ModalResults(Results):
         self,
         mode=None,
         nodes=None,
-        rotor=None,
         fig=None,
+        major_axis=False,
+        middle_point=False,
         frequency_type="wd",
         title=None,
         frequency_units="rad/s",
@@ -1757,6 +1823,12 @@ class ModalResults(Results):
             Int or list of ints with the nodes selected to be plotted.
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
+        major_axis : bool, optional
+            Plot the major axis point.
+            Default is False.
+        middle_point : bool, optional
+            Plot the middle point of a orbit.
+            Default is False.
         frequency_type : str, optional
             "wd" calculates de map for the damped natural frequencies.
             "wn" calculates de map for the undamped natural frequencies.
@@ -1811,7 +1883,9 @@ class ModalResults(Results):
             fig = shape.plot_orbit([n], 
                                 fig=fig, 
                                 row=row, 
-                                col=col)
+                                col=col,
+                                major_axis=major_axis, 
+                                middle_point=middle_point)
             row = row + 1
             if row == max_rows + 1:
                 row = 1
@@ -1821,8 +1895,8 @@ class ModalResults(Results):
             autosize=True,
             # width=500,
             # height=500,
-            xaxis_range=[-1, 1],
-            yaxis_range=[-1, 1],
+            # xaxis_range=[-1, 1],
+            # yaxis_range=[-1, 1],
             title={
                 "text": f"Mode {mode} - Nodes {nodes}",
                 "x": 0.5,
