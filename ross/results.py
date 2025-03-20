@@ -555,7 +555,7 @@ class Shape(Results):
             Nx = np.hstack((N1, Le * N2, N3, Le * N4))
             Ny = np.hstack((N1, -Le * N2, N3, -Le * N4))
 
-            ind = num_dof * (n - self.start_idx)
+            ind = num_dof * n
             # [x[1], theta_y[1], x[2], theta_y[2]]
             xx = [
                 ind + 0,
