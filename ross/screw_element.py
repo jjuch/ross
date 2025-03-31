@@ -29,16 +29,11 @@ class ScrewElement(ShaftElement6DoF):
     ----------
     L : float, pint.Quantity
         Element length (m).
-    idl : float, pint.Quantity
-        Inner diameter of the element at the left position (m).
-    odl : float, pint.Quantity
-        Outer diameter of the element at the left position (m).
-    idr : float, pint.Quantity, optional
-        Inner diameter of the element at the right position (m).
-        Default is equal to idl value (cylindrical element).
-    odr : float, pint.Quantity, optional
-        Outer diameter of the element at the right position (m).
-        Default is equal to odl value (cylindrical element).
+    crossSection : Polygon or string
+        A file with the cross section shape or the cross section shape itself.
+    units : string, optional
+        The units used in the cross section file.
+        Default is 'm'.
     material : ross.Material
         Shaft material.
     n : int, optional
@@ -544,3 +539,75 @@ class ScrewElement(ShaftElement6DoF):
         fig.update_yaxes(scaleanchor = "x", # These yaxis settings ensure that the circle is non-deformed
                             scaleratio = 1)
         fig.show()
+
+
+    def create_modified(self, **attributes):
+        """Return a new screw element based on the current instance.
+
+        Any attribute passed as an argument will be used to modify the corresponding
+        attribute of the instance. Attributes not provided as arguments will retain
+        their values from the current instance.
+
+        Parameters
+        ----------
+        L : float, pint.Quantity, optional
+            Element length (m). Default is equal to value of current instance.
+        crossSection : Polygon or string
+            A file with the cross section shape or the cross section shape itself.
+        units : string, optional
+            The units used in the cross section file.
+            Default is 'm'.
+        material : ross.Material, optional
+            Shaft material. Default is equal to value of current instance.
+        n : int, optional
+            Element number (coincident with it's first node).
+            Default is equal to value of current instance.
+        axial_force : float, optional
+            Axial force (N). Default is equal to value of current instance.
+        torque : float, optional
+            Torque (N*m). Default is equal to value of current instance.
+        shear_effects : bool, optional
+            Determine if shear effects are taken into account.
+            Default is equal to value of current instance.
+        rotary_inertia : bool, optional
+            Determine if rotary_inertia effects are taken into account.
+            Default is equal to value of current instance.
+        gyroscopic : bool, optional
+            Determine if gyroscopic effects are taken into account.
+            Default is equal to value of current instance.
+        shear_method_calc : str, optional
+            Determines which shear calculation method the user will adopt
+            Default is equal to value of current instance.
+        alpha : float, optional
+            Mass proportional damping factor.
+            Default is equal to value of current instance.
+        beta : float, optional
+            Stiffness proportional damping factor.
+            Default is equal to value of current instance.
+        tag : str, optional
+            Element tag.
+            Default is None.
+
+        Returns
+        -------
+        screw_element : ross.ScrewElement
+            An instance of the modified screw element.
+        """
+        return self.__class__(
+            L=attributes.get("L", self.L),
+            crossSection=attributes.get("crossSection", self.crossSection),
+            units=attributes.get("units", 'm'),
+            material=attributes.get("material", self.material),
+            n=attributes.get("n", self.n),
+            axial_force=attributes.get("axial_force", self.axial_force),
+            torque=attributes.get("torque", self.torque),
+            shear_effects=attributes.get("shear_effects", self.shear_effects),
+            rotary_inertia=attributes.get("rotary_inertia", self.rotary_inertia),
+            gyroscopic=attributes.get("gyroscopic", self.gyroscopic),
+            shear_method_calc=attributes.get(
+                "shear_method_calc", self.shear_method_calc
+            ),
+            tag=attributes.get("tag", None),
+            alpha=attributes.get("alpha", self.alpha),
+            beta=attributes.get("beta", self.beta),
+        )

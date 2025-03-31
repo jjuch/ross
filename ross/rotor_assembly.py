@@ -194,18 +194,18 @@ class Rotor(object):
             point_mass_elements = []
 
         for i, disk in enumerate(disk_elements):
-            if disk.tag is None or isMultiRotor:
+            if disk.tag is None: # or isMultiRotor: #TODO: why is the tag updated for mulitrotor systems
                 disk.tag = disk.get_class_name_prefix(i)
 
         for i, brg in enumerate(bearing_elements):
             # add n_l and n_r to bearing elements
             brg.n_l = brg.n
             brg.n_r = brg.n
-            if brg.tag is None or isMultiRotor:
+            if brg.tag is None: # or isMultiRotor:
                 brg.tag = brg.get_class_name_prefix(i)
 
         for i, p_mass in enumerate(point_mass_elements):
-            if p_mass.tag is None or isMultiRotor:
+            if p_mass.tag is None: # or isMultiRotor:
                 p_mass.tag = p_mass.get_class_name_prefix(i)
 
         self.shaft_elements = sorted(shaft_elements, key=lambda el: el.n)
@@ -227,7 +227,14 @@ class Rotor(object):
         # check if tags are unique
         tags_list = [el.tag for el in self.elements]
         if len(tags_list) != len(set(tags_list)):
-            raise ValueError("Tags should be unique.")
+            # raise ValueError("Tags should be unique.")
+            tags = []
+            for el in self.elements:
+                tags.append(el.tag)
+                if len(tags) != len(set(tags)):
+                    el.tag += '_1'
+                    tags[-1] = el.tag
+            tags_list = [el.tag for el in self.elements]
 
         self.number_dof = self._check_number_dof()
 

@@ -29,8 +29,9 @@ class GearElement(DiskElement):
         Diametral moment of inertia.
     Ip : float, pint.Quantity
         Polar moment of inertia.
-    N: int
+    N: int, optional
         Number of theeth.
+        Default is -1.
     base_diameter : float, pint.Quantity
         Base diameter of the gear (m).
         If given pitch_diameter is not necessary.
@@ -71,7 +72,7 @@ class GearElement(DiskElement):
         m,
         Id,
         Ip,
-        N,
+        N=-1,
         pitch_diameter=None,
         base_diameter=None,
         pressure_angle=None,
@@ -104,7 +105,7 @@ class GearElement(DiskElement):
         width,
         i_d,
         o_d,
-        N,
+        N=-1,
         pressure_angle=None,
         tag=None,
         scale_factor=1.0,
@@ -144,8 +145,9 @@ class GearElement(DiskElement):
             Inner diameter (the diameter of the shaft on which the gear is mounted).
         o_d : float, pint.Quantity
             Outer pitch diameter (m).
-        N: int
+        N: int, optional
             Number of theeth.
+            Default is -1.
         pressure_angle : float, pint.Quantity, optional
             The pressure angle of the gear (rad).
             Default is 20 deg (converted to rad).
@@ -296,8 +298,9 @@ class GearElement6DoF(DiskElement6DoF):
         Diametral moment of inertia.
     Ip : float, pint.Quantity
         Polar moment of inertia.
-    N: int
+    N: int, optional
         Number of theeth.
+        Default is -1.
     base_diameter : float, pint.Quantity
         Base diameter of the gear (m).
         If given pitch_diameter is not necessary.
@@ -338,7 +341,7 @@ class GearElement6DoF(DiskElement6DoF):
         m,
         Id,
         Ip,
-        N,
+        N=-1,
         pitch_diameter=None,
         base_diameter=None,
         pressure_angle=None,
@@ -371,7 +374,7 @@ class GearElement6DoF(DiskElement6DoF):
         width,
         i_d,
         o_d,
-        N,
+        N=-1,
         pressure_angle=None,
         tag=None,
         scale_factor=1.0,
@@ -411,8 +414,9 @@ class GearElement6DoF(DiskElement6DoF):
             Inner diameter (the diameter of the shaft on which the gear is mounted).
         o_d : float, pint.Quantity
             Outer pitch diameter (m).
-        N: int
+        N: int, optional
             Number of theeth.
+            Default is -1.
         pressure_angle : float, pint.Quantity, optional
             The pressure angle of the gear (rad).
             Default is 20 deg (converted to rad).

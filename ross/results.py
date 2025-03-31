@@ -694,8 +694,9 @@ class Shape(Results):
 
         frames = []
         initial_state = []
+
         for i, var in enumerate(variation):
-            zt = np.array(nodes_pos) + rel_disp * var
+            zt = np.array(nodes_pos) + rel_disp[self.nodes] * var
 
             node_data = []
             xn = []

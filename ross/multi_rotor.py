@@ -119,6 +119,7 @@ class MultiRotor(Rotor):
         self.gear_ratio = gear_ratio
         self.gear_mesh_stiffness = gear_mesh_stiffness
         self.orientation_angle = float(orientation_angle)
+        self.position=position
 
         R1 = copy(driving_rotor)
         R2 = copy(driven_rotor)
@@ -192,7 +193,7 @@ class MultiRotor(Rotor):
         disk_elements = [*R1.disk_elements, *R2.disk_elements]
         bearing_elements = [*R1.bearing_elements, *R2.bearing_elements]
         point_mass_elements = [*R1.point_mass_elements, *R2.point_mass_elements]
-
+        
         self.start_nodes_multirotor = driving_rotor.start_nodes_multirotor
         self.start_nodes_multirotor.extend([d_start + driving_rotor.nodes[-1] + 1 for d_start in driven_rotor.start_nodes_multirotor])
         
@@ -504,7 +505,64 @@ class MultiRotor(Rotor):
         return self._join_matrices(
             self.rotors[0].G(), -self.gear_ratio * self.rotors[1].G()
         )
+    
 
+    def add_nodes(self, driving_nodes=None, driven_nodes=None):
+        """
+        Add nodes to a MultiRotor object, based on the location.
+        
+        Parameters
+        ----------
+        driving_nodes : list
+            List of positions of new nodes on the driving rotor. Can be a nested list of dimension 2, in case the driving rotor is again a MultiRotor.
+            Optional, default is None.
+        driven_nodes : list
+            List of positions of new nodes on the driven rotor. Can be a nested list of dimension 2, in case the driven rotor is again a MultiRotor.
+            Optional, default is None.
+
+        Returns
+        -------
+        R : MultiRotor
+            A new multi-rotor object with the added nodes.
+
+        Examples
+        --------
+        >>> multi_rotor = two_shaft_rotor_example()
+        >>> multi_rotor = multi_rotor.add_nodes(
+                driving_nodes=[0.4], driven_nodes=[0.1, 0.2])
+        """
+        # TODO: test nested behaviour
+        if driving_nodes is None and driven_nodes is None:
+            raise ValueError("[add_nodes] Both the driving and driven rotor do not have additional nodes.")
+        driving_rotor, driven_rotor = tuple([copy(r) for r in self.rotors])
+        driving_gear, driven_gear = tuple([copy(g) for g in self.gears])
+        
+        if driving_nodes is not None:
+            if isinstance(driving_rotor, MultiRotor):
+                driving_rotor = self.add_nodes(driving_nodes=driving_nodes[0], driven_nodes=driving_nodes[1])
+            else: # Rotor object
+                driving_rotor = driving_rotor.add_nodes(driving_nodes)
+        if driven_nodes is not None:       
+            if isinstance(driven_rotor, MultiRotor):
+                driven_rotor = self.add_nodes(driving_nodes=driven_nodes[0], driven_nodes=driven_nodes[1])
+            else: # Rotor object
+                driven_rotor = driven_rotor.add_nodes(driven_nodes)
+
+        n_driving =  [g for g in driving_rotor.disk_elements if g.__hash__() == driving_gear.__hash__()][0].n
+        n_driven =  [g for g in driven_rotor.disk_elements if g.__hash__() == driven_gear.__hash__()][0].n
+        coupled_nodes = (n_driving, n_driven)
+
+        return MultiRotor(
+            driving_rotor=driving_rotor,
+            driven_rotor=driven_rotor,
+            coupled_nodes=coupled_nodes,
+            gear_ratio=self.gear_ratio,
+            gear_mesh_stiffness=self.gear_mesh_stiffness,
+            orientation_angle=self.orientation_angle,
+            position=self.position,
+            tag=self.tag
+        )
+        
 
 def two_shaft_rotor_example():
     """Create a multi-rotor as example.
@@ -643,5 +701,9 @@ def two_shaft_rotor_example():
 
 if __name__ == "__main__":
     twinRotor = two_shaft_rotor_example()
+    fig = twinRotor.plot_rotor()
+    fig.show()
+
+    twinRotor = twinRotor.add_nodes(driving_nodes=[2], driven_nodes=[1, 2])
     fig = twinRotor.plot_rotor()
     fig.show()
