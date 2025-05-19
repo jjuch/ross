@@ -8,6 +8,7 @@ import inspect
 from abc import ABC
 from collections.abc import Iterable
 from pathlib import Path
+from tkinter import Y
 from tracemalloc import start
 from warnings import warn
 
@@ -637,10 +638,10 @@ class Shape(Results):
         return fig
 
     def _plot_axial(
-        self, plot_dimension=None, animation=False, length_units="m", fig=None
+        self, plot_dimension=None, animation=False, length_units="m", fig=None, row=1, col=1
     ):
         if fig is None:
-            fig = go.Figure()
+            fig = make_subplots(rows=row, cols=col)
 
         size = len(self.vector)
         axial_dofs = np.arange(2, size, self.number_dof)
@@ -673,7 +674,8 @@ class Shape(Results):
                         hoverinfo="none",
                         showlegend=False,
                     ),
-                ]
+                ],
+                rows=row, cols=col
             )
 
             fig.update_yaxes(title_text="Relative Displacement", range=[-1, 1])
@@ -764,62 +766,66 @@ class Shape(Results):
             ),
         ]
 
-        fig.add_traces(data=[*initial_state, *original, *center_line])
+        fig.add_traces(data=[*initial_state, *original, *center_line], rows=row, cols=col)
 
-        fig.update_layout(
-            scene=dict(
+        fig.update_scenes(
+            dict(
                 yaxis=dict(showticklabels=False),
                 zaxis=dict(showticklabels=False),
-            )
+            ),
+            row=row, col=col
         )
 
         if plot_dimension == 3 and not animation:
             return fig
-
-        fig.update(
-            layout=dict(
-                updatemenus=[
-                    dict(
-                        type="buttons",
-                        buttons=[
-                            dict(
-                                args=[
-                                    None,
-                                    dict(
-                                        frame=dict(duration=100, redraw=True),
-                                        mode="immediate",
-                                    ),
-                                ],
-                                label="Play",
-                                method="animate",
-                            ),
-                            dict(
-                                args=[
-                                    [None],
-                                    dict(
-                                        frame=dict(duration=0, redraw=False),
-                                        mode="immediate",
-                                    ),
-                                ],
-                                label="Pause",
-                                method="animate",
-                            ),
-                        ],
-                        x=0.05,
-                        y=0.25,
-                    )
-                ]
-            ),
-            frames=frames,
-        )
+        
+        total_frames = list(fig.frames)
+        total_frames.extend(list(frames))
+        fig.update(frames=total_frames)
+        menus = fig.layout.updatemenus
+        if len(menus) == 0:
+            fig.update_layout(dict(
+                    updatemenus=[
+                        dict(
+                            type="buttons",
+                            buttons=[
+                                dict(
+                                    args=[
+                                        None,
+                                        dict(
+                                            frame=dict(duration=100, redraw=True),
+                                            mode="immediate",
+                                        ),
+                                    ],
+                                    label="Play",
+                                    method="animate"
+                                ),
+                                dict(
+                                    args=[
+                                        [None],
+                                        dict(
+                                            frame=dict(duration=0, redraw=False),
+                                            mode="immediate",
+                                        ),
+                                    ],
+                                    label="Pause",
+                                    method="animate"
+                                ),
+                            ],
+                            x=0.05,
+                            y=0.25,
+                        )
+                    ]
+                )
+            )
 
         return fig
 
     def _plot_torsional(
-        self, plot_dimension=None, animation=False, length_units="m", fig=None
+        self, plot_dimension=None, animation=False, length_units="m", fig=None, row=1, col=1
     ):
         if fig is None:
-            fig = go.Figure()
+            fig = make_subplots(rows=row, cols=col)
 
         size = len(self.vector)
         torsional_dofs = np.arange(5, size, self.number_dof)
@@ -852,7 +858,8 @@ class Shape(Results):
                         hoverinfo="none",
                         showlegend=False,
                     ),
-                ]
+                ],
+                rows=row, cols=col
             )
 
             fig.update_yaxes(title_text="Relative Angle", range=[-1, 1])
@@ -940,13 +947,17 @@ class Shape(Results):
             ),
         ]
 
-        fig.add_traces(data=[*initial_state, *center_line])
+        fig.add_traces(data=[*initial_state, *center_line], rows=row, cols=col)
 
         if plot_dimension == 3 and not animation:
             return fig
 
-        fig.update(
-            layout=dict(
+        total_frames = list(fig.frames)
+        total_frames.extend(list(frames))
+        fig.update(frames=total_frames)
+        menus = fig.layout.updatemenus
+        if len(menus) == 0:
+            fig.update_layout(dict(
                 updatemenus=[
                     dict(
                         type="buttons",
@@ -979,7 +990,6 @@ class Shape(Results):
                     )
                 ]
             ),
-            frames=frames,
         )
 
         return fig
@@ -1086,7 +1096,7 @@ class Shape(Results):
         **kwargs,
     ):
         if fig is None:
-            fig = go.Figure()
+            fig = make_subplots(rows=row, cols=col)
 
         if self.mode_type == "Torsional":
             fig = self._plot_torsional(
@@ -1102,6 +1112,8 @@ class Shape(Results):
                 animation=animation,
                 length_units=length_units,
                 fig=fig,
+                row=row,
+                col=col
             )
 
         else:
