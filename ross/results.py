@@ -655,30 +655,37 @@ class Shape(Results):
 
         if plot_dimension == 2:
             # Plot 2d
-            fig.add_traces(
-                data=[
-                    go.Scatter(
+            data = []
+
+            data.append(
+                go.Scatter(
+                    x=nodes_pos,
+                    y=rel_disp,
+                    mode="lines+markers",
+                    line=dict(width=2, color=self.color),
+                    marker=dict(size=3),
+                    showlegend=False,
+                    hovertemplate=("Original position: %{x:.2f}<br>"
+                        + "Relative displacement: %{y:.2f}"),
+                )
+            )
+            data.append(
+                go.Scatter(
                         x=nodes_pos,
-                        y=rel_disp,
-                        mode="lines",
-                        line=dict(color=self.color),
-                        showlegend=False,
-                        hovertemplate=(f"Relative angle: %{{y:.2f }}<extra></extra>"),
-                    ),
-                    go.Scatter(
-                        x=nodes_pos,
-                        y=nodes_pos * 0,
+                        y=len(nodes_pos) * [0],
                         mode="lines",
                         line=dict(color="black", dash="dashdot"),
                         name="centerline",
                         hoverinfo="none",
                         showlegend=False,
-                    ),
-                ],
+                )
+            )
+            fig.add_traces(
+                data=data,
                 rows=row, cols=col
             )
 
-            fig.update_yaxes(title_text="Relative Displacement", range=[-1, 1])
+            fig.update_yaxes(title_text="Relative Displacement", range=[1.15 * min(rel_disp), 1.15 * max(rel_disp)])
             fig.update_xaxes(title_text=f"Rotor Length ({length_units})")
 
             return fig
@@ -995,7 +1002,13 @@ class Shape(Results):
         return fig
 
     def plot_2d(
-        self, orientation="major", length_units="m", phase_units="rad", row=1, col=1, fig=None
+        self,
+        orientation="major",
+        length_units="m",
+        phase_units="rad",
+        row=1, 
+        col=1, 
+        fig=None
     ):
         """Rotor shape 2d plot.
 
@@ -1030,13 +1043,13 @@ class Shape(Results):
         nodes_pos = Q_(self.nodes_pos, "m").to(length_units).m
 
         if fig is None:
-            fig = go.Figure()
+            fig = make_subplots(rows=row, cols=col)
 
         if self.mode_type == "Torsional":
-            self._plot_torsional(plot_dimension=2, length_units=length_units, fig=fig)
+            self._plot_torsional(plot_dimension=2, length_units=length_units, fig=fig, row=row, col=col)
 
         elif self.mode_type == "Axial":
-            self._plot_axial(plot_dimension=2, length_units=length_units, fig=fig)
+            self._plot_axial(plot_dimension=2, length_units=length_units, fig=fig, row=row, col=col)
 
         else:
             if orientation == "major":
