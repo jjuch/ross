@@ -3,6 +3,7 @@
 This module returns graphs for each type of analyses in rotor_assembly.py.
 """
 
+from ast import In
 import copy
 import inspect
 from abc import ABC
@@ -642,7 +643,7 @@ class Shape(Results):
     ):
         if fig is None:
             fig = make_subplots(rows=row, cols=col)
-
+        print("vec: ", self.vector)
         size = len(self.vector)
         axial_dofs = np.arange(2, size, self.number_dof)
 
@@ -650,6 +651,7 @@ class Shape(Results):
             np.angle(self.vector[axial_dofs])
         )
         rel_disp /= max(np.abs(rel_disp))
+        print("rel: ", rel_disp)
 
         nodes_pos = Q_(self.nodes_pos, "m").to(length_units).m
 
@@ -664,6 +666,7 @@ class Shape(Results):
                     mode="lines+markers",
                     line=dict(width=2, color=self.color),
                     marker=dict(size=3),
+                    name=f"Node {self.nodes}",
                     showlegend=False,
                     hovertemplate=("Original position: %{x:.2f}<br>"
                         + "Relative displacement: %{y:.2f}"),
@@ -1382,6 +1385,40 @@ class ModalResults(Results):
         self.number_dof = number_dof
         self.start_nodes_multirotor=start_nodes_multirotor
         self.update_mode_shapes()
+
+
+    def __str__(self):
+        # Get whirl direction for each rotor
+        j = 0
+        rotor_exists = True
+        whirls = []
+        while rotor_exists:
+            try:
+                whirls.append(self.whirl_direction(rotor=j))
+                j += 1
+            except IndexError:
+                rotor_exists = False
+        whirls = np.array(whirls).T
+        whirl_dir = []
+        for j in range(len(whirls)):
+            whirl_dir.append('; '.join(whirls[j]))
+
+        # Create ascii table with modal results
+        final = "\nMode \twn [Hz] \twd [Hz] \tmode type \tdamping ratio \t\twhirl direction\n"
+        final += "--------------------------------------------------------------------------------------------------\n"
+        
+        for i in range(len(self.wn)):
+            final += str(i + 1) +f":\t"
+            final += "{:.2f}\t\t".format(abs(Q_(self.wn[i], "rad/s").to("Hz").m))
+            final += "{:.2f}\t\t".format(abs(Q_(self.wd[i], "rad/s").to("Hz").m))
+            final += self.shapes[i, 0].mode_type + "\t\t"
+            final += "{:.2e}\t\t".format(self.damping_ratio[i])
+            final += whirl_dir[i] + "\n"
+
+        final += "@ Speed: {:.2f} rpm\n".format(Q_(self.speed, "rad/s").to("rpm").m)
+        final += "--------------------------------------------------------------------------------------------------\n"
+            
+        return final
        
     def update_mode_shapes(self):
         self.modes = self.evectors[: self.ndof]
