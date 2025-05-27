@@ -352,7 +352,10 @@ class GearElement6DoF(DiskElement6DoF):
         if pressure_angle is None:
             pressure_angle = Q_(20, "deg")
 
-        self.pressure_angle = float(pressure_angle)
+        if isinstance(pressure_angle, (float, int)):
+            self.pressure_angle = Q_(pressure_angle, "deg").to("rad").m
+        else:
+            self.pressure_angle = pressure_angle.to("rad").m
         self.N = N
 
         if base_diameter:
@@ -550,3 +553,89 @@ class GearElement6DoF(DiskElement6DoF):
         )
 
         return fig
+
+
+class HelicalGearElement6DoF(GearElement6DoF):
+    """A helical gear element.
+
+    This class creates a helical gear element from input data of inertia and mass.
+    It inherits from GearElement6DoF and adds the helix angle property.
+
+    Parameters
+    ----------
+    helix_angle : float, pint.Quantity
+        The helix angle of the gear (deg).
+        Default is 0 rad.
+    """
+
+    def __init__(
+        self,
+        n,
+        m,
+        Id,
+        Ip,
+        N=-1,
+        pitch_diameter=None,
+        base_diameter=None,
+        pressure_angle=None,
+        helix_angle=None,
+        tag=None,
+        scale_factor=1.0,
+        color="Magenta",
+    ):
+        self.helix_angle = None
+        if helix_angle is None:
+            super().__init__(
+                n, m, Id, Ip, N, pitch_diameter, base_diameter, pressure_angle, tag, scale_factor, color
+            )
+        else: 
+            if isinstance(helix_angle, (float, int)):
+                self.helix_angle = Q_(helix_angle, "deg").to("rad").m
+            else:
+                self.helix_angle = helix_angle.to("rad").m
+            
+            self.N = N
+
+            Km1 = self.stiffness_meshing_element()
+
+            
+    def stiffness_meshing_element(self, type, mesh_stiffness):
+        """Calculate the stiffness of the meshing element.
+
+        The stiffness of the meshing element is calculated based on the
+        helix angle and pressure angle.
+
+        Parameters
+        ----------
+        type : str
+            Pinion ('driving') or gear ('driven').
+        mesh_stiffness : float
+            The stiffness of the meshing element (N/m).
+            # TODO: in paper should be dependant on time
+
+        Returns
+        -------
+        float
+            The stiffness of the meshing element.
+
+        [1] Huangfu et al. (2021), "A flexible-helical-geared rotor dynamic model based on hybrid beam-shell elements",
+        Journal of Sound and Vibration, 511, 116361.
+        """
+        psi = self.pressure_angle
+        beta = self.helix_angle
+
+        # Vector [x_p, y_p, z_p, theta_x_p, theta_y_p, theta_z_p, x_g, y_g, z_g, theta_x_g, theta_y_g, theta_z_g]
+        # where x_p, y_p, z_p are the position of the pinion (driving), theta_x_p, theta_y_p, theta_z_p are the angles of the pinion
+        # and x_g, y_g, z_g are the position of the gear (driven), theta_x_g, theta_y_g, theta_z_g are the angles of the gear.
+        if type == "driving":
+            Vm1 = np.array([[-np.sin(psi)*np.cos(beta), np.cos(psi)*np.cos(beta), np.sign(np.sin(beta)), 0, 0, 0]])
+        elif type == "driven":
+            Vm1 = np.array([[np.sin(psi)*np.cos(beta), -np.cos(psi)*np.cos(beta), -np.sign(np.sin(beta)), 0, 0, 0]])
+        else:
+            raise ValueError("Type must be either 'driving' or 'driven'.")
+        Vm = Vm1.T @ Vm1
+
+        return Vm * mesh_stiffness
+
+
+    
