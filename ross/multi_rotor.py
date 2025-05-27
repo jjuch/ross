@@ -5,6 +5,7 @@ from copy import deepcopy as copy
 import ross as rs
 from ross.gear_element import GearElement, GearElement6DoF
 from ross.rotor_assembly import Rotor
+from ross.tests.test_shaft_element import coupling
 
 __all__ = ["MultiRotor"]
 
@@ -321,29 +322,27 @@ class MultiRotor(Rotor):
                [0.35355339, 0.85355339, 0.        , 0.        ],
                [0.        , 0.        , 0.        , 0.        ],
                [0.        , 0.        , 0.        , 0.        ]])
+
+        References
+        ----------
+        [1] Wang, Q., Li, Z., Ma, H. et al. Effects of different coupling models of a helical gear system on vibration characteristics. J Mech Sci Technol 31, 2143–2154 (2017). https://doi.org/10.1007/s12206-017-0410-z
         """
         r1 = self.gears[0].base_radius
         r2 = self.gears[1].base_radius
+        if self.gears[0].helical_pitch != self.gears[1].helical_pitch:
+            raise ValueError(
+                "The helical pitch of the coupling gears must be the same."
+            )
+        else:
+            beta = self.gears[0].helical_pitch
 
         S = np.sin(self.gears[0].pressure_angle - self.orientation_angle)
         C = np.cos(self.gears[0].pressure_angle - self.orientation_angle)
+        Sb = np.sin(beta)
+        Cb = np.cos(beta)
 
-        # fmt: off
-        coupling_matrix = np.array([
-            [   S**2,  S * C, 0, 0, 0,  r1 * S,   -S**2,  -S * C, 0, 0, 0,  r2 * S],
-            [  S * C,   C**2, 0, 0, 0,  r1 * C,  -S * C,   -C**2, 0, 0, 0,  r2 * C],
-            [      0,      0, 0, 0, 0,       0,       0,       0, 0, 0, 0,       0],
-            [      0,      0, 0, 0, 0,       0,       0,       0, 0, 0, 0,       0],
-            [      0,      0, 0, 0, 0,       0,       0,       0, 0, 0, 0,       0],
-            [ r1 * S, r1 * C, 0, 0, 0,   r1**2, -r1 * S, -r1 * C, 0, 0, 0, r1 * r2],
-            [  -S**2, -S * C, 0, 0, 0, -r1 * S,    S**2,   S * C, 0, 0, 0, -r2 * S],
-            [ -S * C,  -C**2, 0, 0, 0, -r1 * C,   S * C,    C**2, 0, 0, 0, -r2 * C],
-            [      0,      0, 0, 0, 0,       0,       0,       0, 0, 0, 0,       0],
-            [      0,      0, 0, 0, 0,       0,       0,       0, 0, 0, 0,       0],
-            [      0,      0, 0, 0, 0,       0,       0,       0, 0, 0, 0,       0],
-            [ r2 * S, r2 * C, 0, 0, 0, r1 * r2, -r2 * S, -r2 * C, 0, 0, 0,   r2**2],
-        ])
-        # fmt: on
+        V0 = np.array([[S*Cb, C*Cb, Sb, -r1*S*Sb, -r1*C*Sb, r1*Cb, -S*Cb, -C*Cb, -Sb, -r2*S*Sb, -r2*C*Sb, r2*Cb]])
+        coupling_matrix = V0.T @ V0
 
         return coupling_matrix
 
