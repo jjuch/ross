@@ -343,7 +343,7 @@ class MultiRotor(Rotor):
 
         V0 = np.array([[S*Cb, C*Cb, Sb, -r1*S*Sb, -r1*C*Sb, r1*Cb, -S*Cb, -C*Cb, -Sb, -r2*S*Sb, -r2*C*Sb, r2*Cb]])
         coupling_matrix = V0.T @ V0
-
+        
         return coupling_matrix
 
     def M(self, frequency=None, synchronous=False):

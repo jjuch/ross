@@ -814,6 +814,7 @@ class Rotor(object):
         evalues, evectors = self._eigen(
             speed, num_modes=num_modes, sparse=sparse, synchronous=synchronous
         )
+
         wn_len = num_modes if full else num_modes // 2
         wn = (np.absolute(evalues))[:wn_len]
         wd = (np.imag(evalues))[:wn_len]
@@ -1554,7 +1555,7 @@ class Rotor(object):
         if sorted_:
             idx = self._index(evalues)
             evalues, evectors = filter_eigenpairs(evalues, evectors, idx)
-
+        
         return evalues, evectors
 
     def _lti(self, speed, frequency=None):

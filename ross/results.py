@@ -2207,9 +2207,10 @@ class CampbellResults(Results):
                 w_i = wd[:, i]
                 whirl_i = whirl[:, i]
                 damping_values_i = damping_values[:, i]
-
+                # for j in speed_range:
+                #     print(len(self.modal_results[j].shapes[i]))
                 mode_shape = np.array(
-                    [self.modal_results[j].shapes[i].mode_type for j in speed_range]
+                    [self.modal_results[j].shapes[i, 0].mode_type for j in speed_range]
                 )
                 mode_mask_g = np.array([mode in legends for mode in mode_shape])
 
