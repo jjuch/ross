@@ -1204,6 +1204,9 @@ class Rotor(object):
             dofs = list(elm.dof_global_index.values())
             Ksdt0[np.ix_(dofs, dofs)] += elm.Kdt()
 
+
+        print("Ksdt0 = ", Ksdt0, "\n======================")
+
         return Ksdt0
 
     def C(self, frequency, ignore=[]):

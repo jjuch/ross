@@ -5,10 +5,12 @@ This module returns graphs for each type of analyses in rotor_assembly.py.
 
 from ast import In
 import copy
+import enum
 import inspect
 from abc import ABC
 from collections.abc import Iterable
 from pathlib import Path
+from re import A
 from tkinter import Y
 from tracemalloc import start
 from warnings import warn
@@ -482,18 +484,39 @@ class Shape(Results):
     def _classify(self):
         size = len(self.vector)
 
+        x_dofs = np.arange(0, size, self.number_dof)
+        y_dofs = np.arange(1, size, self.number_dof)
+        orbit_dofs = np.concatenate((x_dofs, y_dofs))
         axial_dofs = np.arange(2, size, self.number_dof)
         torsional_dofs = np.arange(5, size, self.number_dof)
 
         nonzero_dofs = np.nonzero(np.abs(self.vector).round(6))[0]
 
-        self.mode_type = "Lateral"
+        self.mixed_mode_type = None
         if np.isin(nonzero_dofs, axial_dofs).all():
             self.mode_type = "Axial"
             self.color = tableau_colors["orange"]
         elif np.isin(nonzero_dofs, torsional_dofs).all():
             self.mode_type = "Torsional"
             self.color = tableau_colors["green"]
+        else:
+            ax_avg = np.mean(
+                [np.abs(v) for i, v in enumerate(self.vector) if i in axial_dofs]
+            )
+            orbit_avg = np.mean(
+                [np.abs(v) for i, v in enumerate(self.vector) if i in orbit_dofs]
+            )
+            if abs(np.log10(ax_avg) - np.log10(orbit_avg)) < 0.8:
+                self.mode_type = "Axial-Lateral"
+                self.color = tableau_colors["gray"]
+            elif ax_avg > orbit_avg:
+                self.mode_type = "Axial"
+                self.color = tableau_colors["red"]
+            else:
+                self.mode_type = "Lateral"
+                self.color = tableau_colors["blue"]
+            
+
 
     def _calculate_orbits(self):
         orbits = []
@@ -506,7 +529,7 @@ class Shape(Results):
 
         self.orbits = orbits
         # check shape whirl
-        if self.mode_type == "Lateral":
+        if self.mode_type in ("Lateral", "Axial-Lateral"):
             if all(w == "Forward" for w in whirl):
                 self.whirl = "Forward"
                 self.color = tableau_colors["blue"]
@@ -1404,15 +1427,15 @@ class ModalResults(Results):
             whirl_dir.append('; '.join(whirls[j]))
 
         # Create ascii table with modal results
-        final = "\nMode \twn [Hz] \twd [Hz] \tmode type \tdamping ratio \t\twhirl direction\n"
+        final = "\nMode \twn [Hz] \twd [Hz] \tmode type \tdamping ratio \twhirl direction\n"
         final += "--------------------------------------------------------------------------------------------------\n"
         
         for i in range(len(self.wn)):
             final += str(i + 1) +f":\t"
             final += "{:.2f}\t\t".format(abs(Q_(self.wn[i], "rad/s").to("Hz").m))
             final += "{:.2f}\t\t".format(abs(Q_(self.wd[i], "rad/s").to("Hz").m))
-            final += self.shapes[i, 0].mode_type + "\t\t"
-            final += "{:.2e}\t\t".format(self.damping_ratio[i])
+            final += self.shapes[i, 0].mode_type + ("\t\t" if self.shapes[i, 0].mode_type != "Axial-Lateral" else "\t")
+            final += "{:.2e}\t".format(self.damping_ratio[i])
             final += whirl_dir[i] + "\n"
 
         final += "@ Speed: {:.2f} rpm\n".format(Q_(self.speed, "rad/s").to("rpm").m)
@@ -1435,7 +1458,7 @@ class ModalResults(Results):
                         nodes=self.nodes[start_idx:stop_idx],
                         nodes_pos=self.nodes_pos[start_idx:stop_idx],
                         shaft_elements_length=shaft_elements_length[start_idx:None if stop_idx is None else stop_idx - 1],
-                        normalize=True,
+                        normalize=True, #TODO: why hardcoded?
                         number_dof=self.number_dof,
                         start_idx=start_idx
                     )

@@ -2061,6 +2061,7 @@ class BearingElement6DoF(BearingElement):
                [      0.,  800000.,       0.],
                [      0.,       0.,  100000.]])
         """
+        print(self.kxx_interpolated)
         kxx = self.kxx_interpolated(frequency)
         kyy = self.kyy_interpolated(frequency)
         kxy = self.kxy_interpolated(frequency)
@@ -2115,6 +2116,133 @@ class BearingElement6DoF(BearingElement):
             # fmt: on
 
         return C
+
+
+class BallBearingElement6DoF(BearingElement6DoF):
+    """A 6 DOF bearing element for ball bearings.
+
+    This class will create a bearing element based on some geometric and
+    constructive parameters of ball bearings. The main difference is that
+    cross-coupling stiffness and damping are not modeled in this case.
+
+    The theory used to calculate the stiffness coeficients is based on
+    :cite:`friswell2010dynamics` (pages 182-185). Damping is low in rolling-element
+    bearings and the direct damping coefficient is typically in the range of
+    (0.25 ~ 2.5) x 10e-5 x Kxx (or Kyy).
+
+    Parameters
+    ----------
+    n : int
+        Node which the bearing will be located in.
+    n_balls : float
+        Number of steel spheres in the bearing.
+    d_balls : float
+        Diameter of the steel sphere.
+    fs : float,optional
+        Static bearing loading force.
+    alpha : float, optional
+        Contact angle between the steel sphere and the inner / outer raceway.
+    cxx : float, optional
+        Direct stiffness in the x direction.
+        Default is 1.25*10e-5 * kxx.
+    cyy : float, optional
+        Direct damping in the y direction.
+        Default is 1.25*10e-5 * kyy.
+    tag : str, optional
+        A tag to name the element
+        Default is None.
+    n_link : int, optional
+        Node to which the bearing will connect. If None the bearing is
+        connected to ground.
+        Default is None.
+    scale_factor : float, optional
+        The scale factor is used to scale the bearing drawing.
+        Default is 1.
+    color : str, optional
+        A color to be used when the element is represented.
+        Default is '#355d7a'.
+
+    References
+    ----------
+    .. bibliography::
+        :filter: docname in docnames
+
+    Examples
+    --------
+    >>> n = 0
+    >>> n_balls= 8
+    >>> d_balls = 0.03
+    >>> fs = 500.0
+    >>> alpha = np.pi / 6
+    >>> tag = "ballbearing"
+    >>> bearing = BallBearingElement6DoF(n=n, n_balls=n_balls, d_balls=d_balls,
+    ...                              fs=fs, alpha=alpha, tag=tag)
+    >>> bearing.K(0)
+    array([[4.64168838e+07, 0.00000000e+00],
+           [0.00000000e+00, 1.00906269e+08]])
+    """
+    def __init__(
+        self,
+        n,
+        n_balls,
+        d_balls,
+        fs,
+        alpha,
+        cxx=None,
+        cyy=None,
+        tag=None,
+        n_link=None,
+        scale_factor=1,
+        color="#355d7a",
+    ):
+        self.n_balls = n_balls
+        self.d_balls = d_balls
+        self.fs = fs
+        self.alpha = alpha
+
+        n = 3/2 # From Hertzian theory, Q = k * delta_x^n
+        # K_eps = n_balls * (delta_x * np.sin(alpha) + Delta_r * np.cos(alpha))**(n-1)
+
+        Kb = 13.0e6
+        kyy = (
+            Kb
+            * n_balls ** (2.0 / 3)
+            * d_balls ** (1.0 / 3)
+            * fs ** (1.0 / 3)
+            * (np.cos(alpha)) ** (5.0 / 3)
+        )
+
+        nb = [8, 12, 16]
+        ratio = [0.46, 0.64, 0.73]
+        dict_ratio = dict(zip(nb, ratio))
+
+        if n_balls in dict_ratio.keys():
+            kxx = dict_ratio[n_balls] * kyy
+        else:
+            f = interpolate.interp1d(nb, ratio, "quadratic", fill_value="extrapolate")
+            kxx = f(n_balls) * kyy
+
+        if cxx is None:
+            cxx = 1.25e-5 * kxx
+        if cyy is None:
+            cyy = 1.25e-5 * kyy
+
+        super().__init__(
+            n=n,
+            frequency=None,
+            kxx=kxx,
+            kxy=0.0,
+            kyx=0.0,
+            kyy=kyy,
+            cxx=cxx,
+            cxy=0.0,
+            cyx=0.0,
+            cyy=cyy,
+            tag=tag,
+            n_link=n_link,
+            scale_factor=scale_factor,
+            color=color,
+        )
 
 
 def bearing_example():
