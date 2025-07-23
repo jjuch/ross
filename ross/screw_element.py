@@ -259,7 +259,6 @@ class ScrewElement(ShaftElement6DoF):
         r = shapefile.Reader(fileName)
         shapes = r.shapes()
         polygon = shape(shapes[0])
-        print(polygon)
         fig = go.Figure()
         return polygon
 
@@ -286,9 +285,6 @@ class ScrewElement(ShaftElement6DoF):
         if not cs.is_closed:
             cs = Polygon(list(cs.exterior.coords) + [cs.exterior.coords[0]])
 
-        print(cs.parts)
-        print(shapefile.signed_area(cs.points))
-        exit()
         if self.units == 'm':
             cs_scaled = cs
         elif self.units == 'cm':

@@ -151,7 +151,7 @@ class Rotor(object):
             self.tag = "MultiRotor 0" if isMultiRotor else "Rotor 0"
         else:
             self.tag = tag
-
+             
         if not isMultiRotor:
             self.start_nodes_multirotor = [0]
 
