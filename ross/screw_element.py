@@ -255,12 +255,15 @@ class ScrewElement(ShaftElement6DoF):
         
 
     @classmethod
-    def load_rotor_shape(cls, fileName):
+    def load_rotor_shape(cls, fileName, show=False):
         r = shapefile.Reader(fileName)
         shapes = r.shapes()
         polygon = shape(shapes[0])
-        print(polygon)
-        fig = go.Figure()
+        if show:
+            fig = go.Figure(data=go.Scatter(x=polygon.exterior.xy[0].tolist(), y=polygon.exterior.xy[1].tolist(), mode='lines'))
+            fig.update_xaxes(constrain='domain')  
+            fig.update_yaxes(scaleanchor= 'x')
+            fig.show()
         return polygon
 
     @classmethod
@@ -286,9 +289,6 @@ class ScrewElement(ShaftElement6DoF):
         if not cs.is_closed:
             cs = Polygon(list(cs.exterior.coords) + [cs.exterior.coords[0]])
 
-        print(cs.parts)
-        print(shapefile.signed_area(cs.points))
-        exit()
         if self.units == 'm':
             cs_scaled = cs
         elif self.units == 'cm':
@@ -297,6 +297,7 @@ class ScrewElement(ShaftElement6DoF):
             cs_scaled = sh.transform(cs, lambda x: x * [1e-3, 1e-3])
         else:
             raise ValueError("Units do not exist. Only 'm', 'cm' and 'mm' are implemented.")
+        
         centr = cs_scaled.centroid
         if centr.x > 1e-6 or centr.y > 1e-6:
             cs_shift = sh.transform(cs_scaled, lambda e: e - [centr.x, centr.y])

@@ -177,6 +177,8 @@ class ShaftElement(Element):
         self.gyroscopic = gyroscopic
         self.axial_force = axial_force
         self.torque = torque
+        if type(n) is not int:
+            n = int(n)
         self._n = n
         self.n_l = n
         self.n_r = None
