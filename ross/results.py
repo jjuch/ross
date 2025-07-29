@@ -1936,7 +1936,9 @@ class ModalResults(Results):
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
         """
-        # case where an int is given
+        # case where an int or None is given
+        if nodes is None:
+            nodes = self.shapes[0, 0].nodes
         if not isinstance(nodes, Iterable):
             nodes = [nodes]
 
@@ -1965,6 +1967,7 @@ class ModalResults(Results):
             for j in range(number_of_rotors):
                 if n in self.shapes[mode, j].nodes:
                     rotor_number.append(j)
+
             shape = self.shapes[mode, rotor_number[i]]
             fig = shape.plot_orbit([n], 
                                 fig=fig, 

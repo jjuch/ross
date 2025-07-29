@@ -2061,7 +2061,6 @@ class BearingElement6DoF(BearingElement):
                [      0.,  800000.,       0.],
                [      0.,       0.,  100000.]])
         """
-        print(self.kxx_interpolated)
         kxx = self.kxx_interpolated(frequency)
         kyy = self.kyy_interpolated(frequency)
         kxy = self.kxy_interpolated(frequency)
