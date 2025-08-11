@@ -1,6 +1,8 @@
 RPM = rpm * 1
 Hz = rps
 hour = 60 * minute = h = hr
+gmm = 1e-6 * kilogram * meter = g*mm
+kgm = 1 * kilogram * meter = kg*m
 
 # constant
 pkpk = 0.5

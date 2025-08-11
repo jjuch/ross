@@ -3,7 +3,7 @@
 This module returns graphs for each type of analyses in rotor_assembly.py.
 """
 
-from ast import In
+from ast import In, Mult
 import copy
 import enum
 import inspect
@@ -15,6 +15,7 @@ from tkinter import Y
 from tracemalloc import start
 from warnings import warn
 
+from matplotlib.pyplot import subplot
 import numpy as np
 import pandas as pd
 import toml
@@ -24,6 +25,7 @@ from plotly.subplots import make_subplots
 from scipy import linalg as la
 from scipy.fft import fft
 
+import ross as rs
 from ross.plotly_theme import tableau_colors, coolwarm_r
 from ross.tests.test_misalignment import rotor
 from ross.units import Q_, check_units
@@ -3924,6 +3926,8 @@ class ForcedResponseResults(Results):
         phase_units="rad",
         rotor_length_units="m",
         fig=None,
+        row=1,
+        col=1,
         **kwargs,
     ):
         """Plot the 2D deflected shape diagram.
@@ -3954,6 +3958,10 @@ class ForcedResponseResults(Results):
             Default is 'm'.
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
+        row : int, optional
+            The number of rows in the subplot.
+        col : int, optional
+            The number of columns in the subplot.
         kwargs : optional
             Additional key word arguments can be passed to change the deflected shape
             plot layout only (e.g. width=1000, height=800, ...).
@@ -3989,7 +3997,9 @@ class ForcedResponseResults(Results):
         )
 
         if fig is None:
-            fig = go.Figure()
+            # fig = go.Figure()
+            fig = make_subplots(rows=row, cols=col)
+
         fig = shape.plot_2d(
             phase_units=phase_units, length_units=rotor_length_units, fig=fig
         )
@@ -4017,6 +4027,7 @@ class ForcedResponseResults(Results):
         phase_units="rad",
         rotor_length_units="m",
         fig=None,
+        row=1, col=1,
         **kwargs,
     ):
         """Plot the 3D deflected shape diagram.
@@ -4046,6 +4057,10 @@ class ForcedResponseResults(Results):
             Default is 'm'.
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
+        rows : int, optional
+            The number of rows in the subplot.
+        cols : int, optional
+            The number of columns in the subplot.
         kwargs : optional
             Additional key word arguments can be passed to change the deflected shape
             plot layout only (e.g. width=1000, height=800, ...).
@@ -4093,7 +4108,7 @@ class ForcedResponseResults(Results):
         )
 
         if fig is None:
-            fig = go.Figure()
+            fig = make_subplots(rows=row, cols=col)
 
         fig = shape.plot_3d(
             phase_units=phase_units, length_units=rotor_length_units, fig=fig
@@ -4209,6 +4224,18 @@ class ForcedResponseResults(Results):
         """
         if not any(np.isclose(self.speed_range, speed, atol=1e-6)):
             raise ValueError("No data available for this speed value.")
+        
+        number_of_rotors = len(self.rotor.start_nodes_multirotor) if isinstance(self.rotor, rs.MultiRotor) else 1
+        if fig is None:
+            fig = make_subplots(
+                rows=number_of_rotors,
+                cols=1,
+                specs=[[{'type': 'scatter'}]] * number_of_rotors,
+                subplot_titles=[f"Rotor {i + 1}" for i in range(number_of_rotors)],
+            )
+        layout_dict = dict()
+        kwargs_dict = {'margin': {'b': 60, 'l': 40, 'r': 40, 't': 60}}             
+        fig.update_layout(layout_dict, overwrite=False, **kwargs_dict)
 
         Mx, My = self._calculate_bending_moment(speed=speed)
         Mx = Q_(Mx, "N*m").to(moment_units).m
@@ -4217,53 +4244,67 @@ class ForcedResponseResults(Results):
 
         nodes_pos = Q_(self.rotor.nodes_pos, "m").to(rotor_length_units).m
 
-        if fig is None:
-            fig = go.Figure()
-        fig.add_trace(
-            go.Scatter(
-                x=nodes_pos,
-                y=Mx,
-                mode="lines",
-                name=f"Bending Moment (X dir.) ({moment_units})",
-                legendgroup="Mx",
-                showlegend=True,
-                hovertemplate=f"Nodal Position: %{{x:.2f}}<br>Mx ({moment_units}): %{{y:.2e}}",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=nodes_pos,
-                y=My,
-                mode="lines",
-                name=f"Bending Moment (Y dir.) ({moment_units})",
-                legendgroup="My",
-                showlegend=True,
-                hovertemplate=f"Nodal Position: %{{x:.2f}}<br>My ({moment_units}): %{{y:.2e}}",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=nodes_pos,
-                y=Mr,
-                mode="lines",
-                name=f"Bending Moment (abs) ({moment_units})",
-                legendgroup="Mr",
-                showlegend=True,
-                hovertemplate=f"Nodal Position: %{{x:.2f}}<br>Mr ({moment_units}): %{{y:.2e}}",
-            )
-        )
+        for i in range(number_of_rotors):
+            start_idx = self.rotor.start_nodes_multirotor[i]
+            if i == number_of_rotors - 1:
+                end_idx = len(Mx)
+            else: 
+                end_idx = self.rotor.start_nodes_multirotor[i + 1]
+            Mx_r = Mx[start_idx:end_idx]
+            My_r = My[start_idx:end_idx]
+            Mr_r = Mr[start_idx:end_idx]
+            nodes_pos_r = nodes_pos[start_idx:end_idx]
 
-        # plot center line
-        fig.add_trace(
-            go.Scatter(
-                x=nodes_pos,
-                y=np.zeros_like(nodes_pos),
-                mode="lines",
-                line=dict(color="black", dash="dashdot"),
-                showlegend=False,
-                hoverinfo="none",
+            fig.add_trace(
+                go.Scatter(
+                    x=nodes_pos_r,
+                    y=Mx_r,
+                    mode="lines",
+                    name=f"Bending Moment (X dir.) ({moment_units})",
+                    legendgroup="Mx",
+                    showlegend=True,
+                    hovertemplate=f"Nodal Position: %{{x:.2f}}<br>Mx ({moment_units}): %{{y:.2e}}",
+                ),
+                row=i + 1, col=1
             )
-        )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=nodes_pos_r,
+                    y=My_r,
+                    mode="lines",
+                    name=f"Bending Moment (Y dir.) ({moment_units})",
+                    legendgroup="My",
+                    showlegend=True,
+                    hovertemplate=f"Nodal Position: %{{x:.2f}}<br>My ({moment_units}): %{{y:.2e}}",
+                ),
+                row=i + 1, col=1
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=nodes_pos_r,
+                    y=Mr_r,
+                    mode="lines",
+                    name=f"Bending Moment (abs) ({moment_units})",
+                    legendgroup="Mr",
+                    showlegend=True,
+                    hovertemplate=f"Nodal Position: %{{x:.2f}}<br>Mr ({moment_units}): %{{y:.2e}}",
+                ),
+                row=i + 1, col=1
+            )
+
+            # plot center line
+            fig.add_trace(
+                go.Scatter(
+                    x=nodes_pos_r,
+                    y=np.zeros_like(nodes_pos_r),
+                    mode="lines",
+                    line=dict(color="black", dash="dashdot"),
+                    showlegend=False,
+                    hoverinfo="none",
+                ),
+                row=i + 1, col=1
+            )
 
         fig.update_xaxes(title_text=f"Rotor Length ({rotor_length_units})")
         fig.update_yaxes(title_text=f"Bending Moment ({moment_units})")

@@ -143,7 +143,7 @@ class ScrewElement(ShaftElement6DoF):
         if type(crossSection) is Polygon:
             self.crossSection = crossSection
         elif type(crossSection) is str:
-            self.crossSection = self.load_rotor_shape(crossSection)
+            self.crossSection = self.load_rotor_shape(crossSection, show=False)
         else:
             raise AssertionError("The cross-section should be a shapely.Polygon object or a path to a shapefile (*.shp).")
 

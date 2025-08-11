@@ -296,7 +296,7 @@ class MultiRotor(Rotor):
 
         speed = omega
         rotor = self.rotors[0]
-
+        
         if node in self.R2_nodes:
             speed = -self.gear_ratio * omega
             rotor = self.rotors[1]
