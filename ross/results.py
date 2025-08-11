@@ -12,7 +12,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from re import A
 from tkinter import Y
-from tracemalloc import start
+from tracemalloc import start, stop
+from turtle import st
 from warnings import warn
 
 from matplotlib.pyplot import subplot
@@ -3988,21 +3989,34 @@ class ForcedResponseResults(Results):
         idx = np.where(np.isclose(self.speed_range, speed, atol=1e-6))[0][0]
         response = Q_(response[:, idx], base_unit).to(amplitude_units).m
 
-        shape = Shape(
-            vector=response,
-            nodes=self.rotor.nodes,
-            nodes_pos=self.rotor.nodes_pos,
-            shaft_elements_length=self.rotor.shaft_elements_length,
-            number_dof=self.rotor.number_dof,
-        )
-
+        number_of_rotors = len(self.rotor.start_nodes_multirotor) if isinstance(self.rotor, rs.MultiRotor) else 1
         if fig is None:
-            # fig = go.Figure()
-            fig = make_subplots(rows=row, cols=col)
+            fig = make_subplots(
+                rows=number_of_rotors, cols=1,
+                specs=[[{'type': 'scatter'}]] * number_of_rotors,
+                subplot_titles=[f"Rotor {i + 1}" for i in range(number_of_rotors)],
+                )
+        for i in range(number_of_rotors):
+            start_idx = self.rotor.start_nodes_multirotor[i]
+            if i == number_of_rotors - 1:
+                end_idx = self.rotor.nodes[-1] + 1
+            else: 
+                end_idx = self.rotor.start_nodes_multirotor[i + 1]
+            shaft_lengths_r = self.rotor.rotors[i].shaft_elements_length
+            resp_r = response[start_idx * self.rotor.number_dof : end_idx * self.rotor.number_dof]
 
-        fig = shape.plot_2d(
-            phase_units=phase_units, length_units=rotor_length_units, fig=fig
-        )
+            shape = Shape(
+                vector=resp_r,
+                nodes=np.arange(end_idx - start_idx),
+                nodes_pos=self.rotor.nodes_pos[start_idx:end_idx],
+                shaft_elements_length=shaft_lengths_r,
+                number_dof=self.rotor.number_dof,
+            )
+            
+            fig = shape.plot_2d(
+                phase_units=phase_units, length_units=rotor_length_units, 
+                fig=fig, row=i + 1, col=1
+            )
 
         # customize hovertemplate
         fig.update_traces(
@@ -4071,17 +4085,6 @@ class ForcedResponseResults(Results):
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
         """
-        if not any(np.isclose(self.speed_range, speed, atol=1e-6)):
-            raise ValueError("No data available for this speed value.")
-
-        unit_type = str(Q_(1, amplitude_units).dimensionality)
-        try:
-            base_unit = self.default_units[unit_type][0]
-        except KeyError:
-            raise ValueError(
-                "Not supported unit. Dimensionality options are '[length]', '[speed]', '[acceleration]'"
-            )
-
         if not any(np.isclose(self.speed_range, speed, atol=1e-6)):
             raise ValueError("No data available for this speed value.")
 
@@ -4247,7 +4250,7 @@ class ForcedResponseResults(Results):
         for i in range(number_of_rotors):
             start_idx = self.rotor.start_nodes_multirotor[i]
             if i == number_of_rotors - 1:
-                end_idx = len(Mx)
+                end_idx = self.rotor.nodes[-1] + 1
             else: 
                 end_idx = self.rotor.start_nodes_multirotor[i + 1]
             Mx_r = Mx[start_idx:end_idx]
