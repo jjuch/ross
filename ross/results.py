@@ -4015,7 +4015,7 @@ class ForcedResponseResults(Results):
             
             fig = shape.plot_2d(
                 phase_units=phase_units, length_units=rotor_length_units, 
-                fig=fig, row=i + 1, col=1
+                fig=fig, row=i + 1, col=col
             )
 
         # customize hovertemplate
@@ -4071,9 +4071,9 @@ class ForcedResponseResults(Results):
             Default is 'm'.
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
-        rows : int, optional
+        row : int, optional
             The number of rows in the subplot.
-        cols : int, optional
+        col : int, optional
             The number of columns in the subplot.
         kwargs : optional
             Additional key word arguments can be passed to change the deflected shape
@@ -4102,23 +4102,40 @@ class ForcedResponseResults(Results):
         response = Q_(response[:, idx], base_unit).to(amplitude_units).m
         unbalance = self.unbalance
 
-        shape = Shape(
-            vector=response,
-            nodes=self.rotor.nodes,
-            nodes_pos=self.rotor.nodes_pos,
-            shaft_elements_length=self.rotor.shaft_elements_length,
-            number_dof=self.rotor.number_dof,
-        )
-
+        shapes = []
+        number_of_rotors = len(self.rotor.start_nodes_multirotor) if isinstance(self.rotor, rs.MultiRotor) else 1
         if fig is None:
-            fig = make_subplots(rows=row, cols=col)
+            fig = make_subplots(
+                rows=number_of_rotors, cols=1,
+                specs=[[{'type': 'scatter3d'}]] * number_of_rotors,
+                subplot_titles=[f"Rotor {i + 1}" for i in range(number_of_rotors)],
+                )
+        
+        for i in range(number_of_rotors):
+            start_idx = self.rotor.start_nodes_multirotor[i]
+            if i == number_of_rotors - 1:
+                end_idx = self.rotor.nodes[-1] + 1
+            else: 
+                end_idx = self.rotor.start_nodes_multirotor[i + 1]
+            shaft_lengths_r = self.rotor.rotors[i].shaft_elements_length
+            resp_r = response[start_idx * self.rotor.number_dof : end_idx * self.rotor.number_dof]
 
-        fig = shape.plot_3d(
-            phase_units=phase_units, length_units=rotor_length_units, fig=fig
-        )
+            shape = Shape(
+                vector=resp_r,
+                nodes=np.arange(end_idx - start_idx),
+                nodes_pos=self.rotor.nodes_pos[start_idx:end_idx],
+                shaft_elements_length=shaft_lengths_r,
+                number_dof=self.rotor.number_dof,
+            )
+            shapes.append(shape)
+            
+            fig = shape.plot_3d(
+                phase_units=phase_units, length_units=rotor_length_units, 
+                fig=fig, row=i + 1, col=col,
+            )
 
         # plot unbalance markers
-        for i, n, amplitude, phase in zip(
+        for j, n, amplitude, phase in zip(
             range(unbalance.shape[1]), unbalance[0], unbalance[1], unbalance[2]
         ):
             # scale unbalance marker to half the maximum major axis
@@ -4126,7 +4143,18 @@ class ForcedResponseResults(Results):
             scaled_amplitude = np.max(shape.major_axis) / 2
             x = scaled_amplitude * np.cos(phase)
             y = scaled_amplitude * np.sin(phase)
-            z_pos = Q_(shape.nodes_pos[n], "m").to(rotor_length_units).m
+            z_pos = Q_(self.rotor.nodes_pos[n], "m").to(rotor_length_units).m
+            
+            # Assign the unbalance marker to the correct rotor plot
+            if isinstance(self.rotor, rs.MultiRotor):
+                diff_nodes = [n_r - n for n_r in self.rotor.start_nodes_multirotor]
+                for idx, diff in enumerate(diff_nodes):
+                    if diff <= 0:
+                        row_unb = idx + 1
+                    else:
+                        break
+            else:
+                row_unb = 1
 
             fig.add_trace(
                 go.Scatter3d(
@@ -4138,7 +4166,8 @@ class ForcedResponseResults(Results):
                     legendgroup="Unbalance",
                     hoverinfo="none",
                     showlegend=False,
-                )
+                ),
+                row=row_unb, col=col
             )
             fig.add_trace(
                 go.Scatter3d(
@@ -4149,13 +4178,13 @@ class ForcedResponseResults(Results):
                     marker=dict(color=tableau_colors["red"], symbol="diamond"),
                     name="Unbalance",
                     legendgroup="Unbalance",
-                    showlegend=True if i == 0 else False,
+                    showlegend=True if j == 0 else False,
                     hovertemplate=(
                         f"Node: {n}<br>"
                         + f"Magnitude: {amplitude:.2e}<br>"
                         + f"Phase: {phase:.2f}"
                     ),
-                )
+                ), row=row_unb, col=col,
             )
 
         # customize hovertemplate
@@ -4168,7 +4197,9 @@ class ForcedResponseResults(Results):
             ),
         )
 
-        plot_range = Q_(np.max(shape.major_axis) * 1.5, "m").to(amplitude_units).m
+        plot_ranges = [Q_(np.max(s.major_axis) * 1.5, "m").to(amplitude_units).m for s in shapes]
+        # plot_range = Q_(np.max(shape.major_axis) * 1.5, "m").to(amplitude_units).m
+        plot_range = np.max(plot_ranges)
         fig.update_layout(
             scene=dict(
                 xaxis=dict(
@@ -4198,6 +4229,7 @@ class ForcedResponseResults(Results):
         moment_units="N*m",
         rotor_length_units="m",
         fig=None,
+        row=1, col=1,
         **kwargs,
     ):
         """Plot the bending moment diagram.
@@ -4215,6 +4247,10 @@ class ForcedResponseResults(Results):
             Default is m.
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
+        row : int, optional
+            The number of rows in the subplot.
+        col : int, optional
+            The number of columns in the subplot.
         kwargs : optional
             Additional key word arguments can be passed to change the deflected shape
             plot layout only (e.g. width=1000, height=800, ...).
@@ -4232,7 +4268,7 @@ class ForcedResponseResults(Results):
         if fig is None:
             fig = make_subplots(
                 rows=number_of_rotors,
-                cols=1,
+                cols=col,
                 specs=[[{'type': 'scatter'}]] * number_of_rotors,
                 subplot_titles=[f"Rotor {i + 1}" for i in range(number_of_rotors)],
             )
@@ -4268,7 +4304,7 @@ class ForcedResponseResults(Results):
                     showlegend=True,
                     hovertemplate=f"Nodal Position: %{{x:.2f}}<br>Mx ({moment_units}): %{{y:.2e}}",
                 ),
-                row=i + 1, col=1
+                row=i + 1, col=col
             )
 
             fig.add_trace(
@@ -4281,7 +4317,7 @@ class ForcedResponseResults(Results):
                     showlegend=True,
                     hovertemplate=f"Nodal Position: %{{x:.2f}}<br>My ({moment_units}): %{{y:.2e}}",
                 ),
-                row=i + 1, col=1
+                row=i + 1, col=col
             )
             fig.add_trace(
                 go.Scatter(
@@ -4293,7 +4329,7 @@ class ForcedResponseResults(Results):
                     showlegend=True,
                     hovertemplate=f"Nodal Position: %{{x:.2f}}<br>Mr ({moment_units}): %{{y:.2e}}",
                 ),
-                row=i + 1, col=1
+                row=i + 1, col=col
             )
 
             # plot center line
@@ -4306,7 +4342,7 @@ class ForcedResponseResults(Results):
                     showlegend=False,
                     hoverinfo="none",
                 ),
-                row=i + 1, col=1
+                row=i + 1, col=col
             )
 
         fig.update_xaxes(title_text=f"Rotor Length ({rotor_length_units})")
@@ -4409,70 +4445,50 @@ class ForcedResponseResults(Results):
         subplot_kwargs = {} if subplot_kwargs is None else copy.copy(subplot_kwargs)
         speed_str = Q_(speed, "rad/s").to(frequency_units).m
 
-        fig0 = self.plot_deflected_shape_2d(
+        number_of_rotors = len(self.rotor.start_nodes_multirotor) if isinstance(self.rotor, rs.MultiRotor) else 1
+
+        fig = make_subplots(rows=number_of_rotors, cols=3,
+                            specs = [[{"type": "scatter"}, {"type": "scatter3d"}, {"type": "scatter"}]] * number_of_rotors,
+                            shared_xaxes=True,
+                            vertical_spacing=0.02,)
+
+        fig = self.plot_deflected_shape_2d(
             speed,
             amplitude_units=amplitude_units,
             phase_units=phase_units,
             rotor_length_units=rotor_length_units,
+            fig=fig,
+            col=1,
             **shape2d_kwargs,
         )
-        fig1 = self.plot_deflected_shape_3d(
+        
+        fig = self.plot_deflected_shape_3d(
             speed,
             amplitude_units=amplitude_units,
             phase_units=phase_units,
             rotor_length_units=rotor_length_units,
+            fig=fig,
+            col=2,
             **shape3d_kwargs,
         )
-        fig2 = self.plot_bending_moment(
+
+        fig = self.plot_bending_moment(
             speed,
             moment_units=moment_units,
             rotor_length_units=rotor_length_units,
+            fig=fig,
+            col=3,
             **bm_kwargs,
         )
 
-        subplots = make_subplots(
-            rows=2,
-            cols=2,
-            specs=[[{}, {"type": "scene", "rowspan": 2}], [{}, None]],
-            shared_xaxes=True,
-            vertical_spacing=0.02,
-        )
-        for data in fig0["data"]:
-            subplots.add_trace(data, row=1, col=1)
-        for data in fig1["data"]:
-            subplots.add_trace(data, row=1, col=2)
-        for data in fig2["data"]:
-            subplots.add_trace(data, row=2, col=1)
-
-        subplots.update_yaxes(fig0.layout.yaxis, row=1, col=1)
-        subplots.update_xaxes(fig2.layout.xaxis, row=2, col=1)
-        subplots.update_yaxes(fig2.layout.yaxis, row=2, col=1)
-        subplots.update_layout(
-            height=600,
-            scene=dict(
-                bgcolor=fig1.layout.scene.bgcolor,
-                xaxis=fig1.layout.scene.xaxis,
-                yaxis=fig1.layout.scene.yaxis,
-                zaxis=fig1.layout.scene.zaxis,
-                domain=dict(x=[0.47, 1]),
-                aspectmode=fig1.layout.scene.aspectmode,
-                aspectratio=fig1.layout.scene.aspectratio,
-            ),
+        fig.update_layout(
             title=dict(
                 text=f"Deflected Shape<br>Speed = {speed_str} {frequency_units}",
-            ),
-            legend=dict(
-                orientation="h",
-                xanchor="center",
-                yanchor="bottom",
-                x=0.5,
-                y=-0.3,
-                yref="container",
             ),
             **subplot_kwargs,
         )
 
-        return subplots
+        return fig
 
 
 class StaticResults(Results):
