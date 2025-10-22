@@ -1676,7 +1676,9 @@ class Rotor(object):
 
 
     def coupling_nodes(self):
-        return [d.n for d in self.disk_elements if isinstance(d, (GearElement, GearElement6DoF))]
+        nodes = [d.n for d in self.disk_elements if isinstance(d, (GearElement, GearElement6DoF))]
+        nodes.sort()
+        return nodes
 
 
     def transfer_matrix(self, speed=None, frequency=None, modes=None):

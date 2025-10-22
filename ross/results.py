@@ -714,8 +714,8 @@ class Shape(Results):
                 rows=row, cols=col
             )
 
-            fig.update_yaxes(title_text="Relative Displacement", range=[1.15 * min(rel_disp), 1.15 * max(rel_disp)])
-            fig.update_xaxes(title_text=f"Rotor Length ({length_units})")
+            fig.update_yaxes(title_text="Relative Displacement", range=[1.15 * min(rel_disp), 1.15 * max(rel_disp)], row=row, col=col)
+            fig.update_xaxes(title_text=f"Rotor Length ({length_units})", row=row, col=col)
 
             return fig
 
@@ -1123,6 +1123,104 @@ class Shape(Results):
             fig.update_yaxes(title_text="Relative Displacement", row=row, col=col)
 
         return fig
+    
+    def plot_deviation_2d(
+        self,
+        length_units="m",
+        phase_units="rad",
+        avg_node_length=1.0,
+        rotor_index=0,
+        fig=None,
+        **kwargs,
+    ):
+        """Rotor deviation of major axis of mode shape in a 2d plot.
+
+        Parameters
+        ----------
+        length_units : str, optional
+            length units.
+            Default is 'm'.
+        phase_units : str, optional
+            Phase units.
+            Default is "rad"
+        avg_node_length : float, optional
+            Average length between nodes to scale the deviation plot.
+        rotor_index : int, optional
+            Index of the rotor in a multirotor system.
+            Default is 0.
+        fig : Plotly graph_objects.Figure()
+            The figure object with the plot.
+
+        Returns
+        -------
+        fig : Plotly graph_objects.Figure()
+            The figure object with the plot.
+        """
+        
+        nodes_pos = Q_(self.nodes_pos, "m").to(length_units).m
+        avg_node_length = Q_(avg_node_length, "m").to(length_units).m
+
+        if fig is None:
+            fig = go.Figure()
+
+        # TODO: mode_type == 'Torsional' not supported yet
+        evec = self._evec
+        modex = evec[0 : : self.number_dof]
+        modey = evec[1 : : self.number_dof]
+        modez = evec[2 : : self.number_dof]
+
+        modex_rotor = modex[self.nodes]
+        modey_rotor = modey[self.nodes]
+        modez_rotor = modez[self.nodes]
+
+        # Normalize the eigenvector components - Normalize on the full vector, not only the specific rotor of a multirotor system
+        xmax, ixmax = max(abs(modex)), np.argmax(abs(modex))
+        ymax, iymax = max(abs(modey)), np.argmax(abs(modey))
+        zmax, izmax = max(abs(modey)), np.argmax(abs(modey))
+
+        imax = np.argmax([xmax, ymax, zmax])
+        if imax == 0:
+            norm_max = modex[ixmax]
+        elif imax == 1:
+            norm_max = modey[iymax]
+        else:
+            norm_max = modez[izmax]
+        
+        modex_rotor = modex_rotor / norm_max
+        modey_rotor = modey_rotor / norm_max
+        modez_rotor = modez_rotor / norm_max
+
+        nodes_zshift = nodes_pos + np.real(modez_rotor) * avg_node_length / np.max(np.real(modez))
+
+        colors = ['blue', 'red', 'green', 'orange', 'purple']
+        fig.add_trace(
+            go.Scatter(
+                x=nodes_pos,
+                y=np.sqrt(np.real(modex_rotor)**2 + np.real(modey_rotor)**2),
+                mode="lines+markers",
+                name="Rotor {}".format(rotor_index + 1),
+                marker=dict(size=6, color=colors[rotor_index % len(colors)]),
+                line=dict(color=colors[rotor_index % len(colors)], width=2)
+            )
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=nodes_zshift,
+                y=np.sqrt(np.real(modex_rotor)**2 + np.real(modey_rotor)**2) * 1.10,
+                mode="markers+lines",
+                name="Rotor {} (z-shifted)".format(rotor_index + 1),
+                marker=dict(size=6, color=colors[rotor_index % len(colors)], symbol='square'),
+                line=dict(dash="dash", color=colors[rotor_index % len(colors)], width=2),
+            )
+        )
+
+        fig.update_scenes(
+            xaxis_title="Node postion ({})".format(length_units),
+            yaxis_title="(ΔX<sup>2</sup> + ΔY<sup>2</sup>)<sup>0.5</sup> ({})".format(length_units),
+        )     
+
+        return fig
 
     def plot_3d(
         self,
@@ -1283,8 +1381,92 @@ class Shape(Results):
                     center=dict(x=1.15, y=0.5, z=0),
                     up=dict(x=0, y=0, z=1),
                 ),
+                xaxis_title=f"Rotor Length ({length_units})",
+                yaxis_title="X - Displacement",
+                zaxis_title="Y - Displacement",
             ),
             row=row, col=col,
+            **kwargs,
+        )
+
+        return fig
+    
+
+    def plot_deviation_3d(
+        self,
+        mode,
+        title=None,
+        length_units="m",
+        phase_units="rad",
+        animation=False,
+        rotor_index=0,
+        fig=None,
+        **kwargs,
+    ):
+        if fig is None:
+            fig = go.Figure()
+
+        # TODO: mode_type == 'Torsional' not supported yet
+        evec = self._evec
+        modex = evec[0 : : self.number_dof]
+        modey = evec[1 : : self.number_dof]
+        modez = evec[2 : : self.number_dof]
+
+        modex_rotor = modex[self.nodes]
+        modey_rotor = modey[self.nodes]
+        modez_rotor = modez[self.nodes]
+
+        # Normalize the eigenvector components - Normalize on the full vector, not only the specific rotor of a multirotor system
+        xmax, ixmax = max(abs(modex)), np.argmax(abs(modex))
+        ymax, iymax = max(abs(modey)), np.argmax(abs(modey))
+        zmax, izmax = max(abs(modey)), np.argmax(abs(modey))
+
+        imax = np.argmax([xmax, ymax, zmax])
+        if imax == 0:
+            norm_max = modex[ixmax]
+        elif imax == 1:
+            norm_max = modey[iymax]
+        else:
+            norm_max = modez[izmax]
+        
+        modex_rotor = modex_rotor / norm_max
+        modey_rotor = modey_rotor / norm_max
+        modez_rotor = modez_rotor / norm_max
+
+
+        # plot deviations
+        colors = ['blue', 'red', 'green', 'orange', 'purple']
+        fig.add_trace(
+            go.Scatter3d(
+                x=np.real(modex_rotor),
+                y=np.real(modey_rotor),
+                z=np.real(modez_rotor),
+                mode="lines+markers",
+                name=f"Rotor {rotor_index + 1}",
+                marker=dict(size=4, color=colors[rotor_index % len(colors)]),
+                line=dict(color=colors[rotor_index % len(colors)], width=2),
+            )
+        )
+
+        fig.add_trace(
+            go.Scatter3d(
+                x=[np.real(modex_rotor[0])],
+                y=[np.real(modey_rotor[0])],
+                z=[np.real(modez_rotor[0])],
+                mode="markers",
+                name=f"Rotor {rotor_index + 1} - start node",
+                marker=dict(size=6, color=colors[rotor_index % len(colors)], symbol='square'),
+                line=dict(color=colors[rotor_index % len(colors)], width=2),
+            )
+        )
+
+        fig.update_layout(
+            title="Mode Shape {}".format(mode),
+            scene=dict(
+                xaxis_title="ΔX (m)",
+                yaxis_title="ΔY (m)",
+                zaxis_title="ΔZ (m) - axial",
+            ),
             **kwargs,
         )
 
@@ -1669,7 +1851,7 @@ class ModalResults(Results):
         Parameters
         ----------
         mode : int
-            The n'th vibration mode
+            The n'th vibration mode, :math:`n \\in [1, number_of_modes]`.
             Default is None
         frequency_type : str, optional
             "wd" calculates de map for the damped natural frequencies.
@@ -1719,7 +1901,7 @@ class ModalResults(Results):
         fig.update_layout(layout_dict, overwrite=False, **kwargs_dict)
 
         for i in range(number_of_rotors):
-            df = self.data_mode(mode, length_units, frequency_units, damping_parameter, rotor=i)
+            df = self.data_mode(mode - 1, length_units, frequency_units, damping_parameter, rotor=i)
 
             damping_name = df["damping_name"].values[0]
             damping_value = df["damping_value"].values[0]
@@ -1735,7 +1917,7 @@ class ModalResults(Results):
             }
 
         
-            shape = self.shapes[mode, i]
+            shape = self.shapes[mode - 1, i]
             fig = shape.plot_3d(
                 length_units=length_units,
                 phase_units=phase_units,
@@ -1749,7 +1931,7 @@ class ModalResults(Results):
                 title = ""
 
             mode_type = (
-                f"whirl: {self.whirl_direction(rotor=i)[mode]}"
+                f"whirl: {self.whirl_direction(rotor=i)[mode - 1]}"
                 if shape.mode_type == "Lateral"
                 else f"{shape.mode_type} mode"
             )
@@ -1773,6 +1955,129 @@ class ModalResults(Results):
         )
 
         return fig
+    
+
+    def plot_mode_deviation_3d(
+        self,
+        mode=None,
+        frequency_type="wd",
+        title=None,
+        length_units="m",
+        phase_units="rad",
+        frequency_units="rad/s",
+        damping_parameter="log_dec",
+        animation=False,
+        fig=None,
+        **kwargs,
+    ):
+        """Plot (3D view) of the relative displacements of a certain mode.
+
+        Parameters
+        ----------
+        mode : int
+            The n'th vibration mode, :math:`n \\in [1, number_of_modes]`.
+            Default is None
+        frequency_type : str, optional
+            "wd" calculates de map for the damped natural frequencies.
+            "wn" calculates de map for the undamped natural frequencies.
+            Defaults is "wd".
+        title : str, optional
+            A brief title to the mode shape plot, it will be displayed above other
+            relevant data in the plot area. It does not modify the figure layout from
+            Plotly.
+        length_units : str, optional
+            length units.
+            Default is 'm'.
+        phase_units : str, optional
+            Phase units.
+            Default is "rad"
+        frequency_units : str, optional
+            Frequency units that will be used in the plot title.
+            Default is rad/s.
+        damping_parameter : str, optional
+            Define which value to show for damping. We can use "log_dec" or "damping_ratio".
+            Default is "log_dec".
+        animation : boolean, optional
+            Plot with animation.
+            Default is False.
+        fig : Plotly graph_objects.Figure()
+            The figure object with the plot.
+        kwargs : optional
+            Additional key word arguments can be passed to change the plot layout only
+            (e.g. width=1000, height=800, ...).
+            *See Plotly Python Figure Reference for more information.
+
+        Returns
+        -------
+        fig : Plotly graph_objects.Figure()
+            The figure object with the plot.
+        """
+        number_of_rotors = self.shapes.shape[1]
+        if fig is None:
+            fig = go.Figure()
+
+        layout_dict = dict()
+        kwargs_dict = {'margin': {'b': 60, 'l': 40, 'r': 40, 't': 60}}             
+        fig.update_layout(layout_dict, overwrite=False, **kwargs_dict)
+
+        for i in range(number_of_rotors):
+            df = self.data_mode(mode - 1, length_units, frequency_units, damping_parameter, rotor=i)
+
+            damping_name = df["damping_name"].values[0]
+            damping_value = df["damping_value"].values[0]
+
+            wd = df["wd"].values
+            wn = df["wn"].values
+            speed = df["speed"].values
+
+            frequency = {
+                "wd": f"ω<sub>d</sub> = {wd[0]:.2f}",
+                "wn": f"ω<sub>n</sub> = {wn[0]:.2f}",
+                "speed": f"Speed = {speed[0]:.2f}",
+            }
+
+        
+            shape = self.shapes[mode - 1, i]
+            fig = shape.plot_deviation_3d(
+                mode=mode,
+                length_units=length_units,
+                phase_units=phase_units,
+                animation=animation,
+                rotor_index=i,
+                fig=fig
+            )
+
+            if title is None:
+                title = ""
+
+            mode_type = (
+                f"whirl: {self.whirl_direction(rotor=i)[mode - 1]}"
+                if shape.mode_type == "Lateral"
+                else f"{shape.mode_type} mode"
+            )
+
+        
+        fig.update_layout(
+            margin=dict(b=60, l=40, r=40, t=85),
+            legend=dict(x=0.85, y=0.95),
+            title=dict(
+                text=(
+                    f"{title}<br>"
+                    f"Mode {mode} | "
+                    f"{frequency['speed']} {frequency_units} | "
+                    f"{mode_type} | "
+                    f"{frequency[frequency_type]} {frequency_units} | "
+                    f"{damping_name} = {damping_value:.2f}"
+                ),
+                x=0.5,
+                xanchor="center",
+            ),
+            **kwargs,
+        )
+
+        return fig
+
+
 
     def plot_mode_2d(
         self,
@@ -1791,7 +2096,7 @@ class ModalResults(Results):
         Parameters
         ----------
         mode : int
-            The n'th vibration mode
+            The n'th vibration mode, :math:`n \\in [1, number_of_modes]`.
         fig : Plotly graph_objects.Figure()
             The figure object with the plot.
         orientation : str, optional
@@ -1838,7 +2143,7 @@ class ModalResults(Results):
 
         for i in range(number_of_rotors):
 
-            df = self.data_mode(mode, length_units, frequency_units, damping_parameter, rotor=i)
+            df = self.data_mode(mode - 1, length_units, frequency_units, damping_parameter, rotor=i)
 
             damping_name = df["damping_name"].values[0]
             damping_value = df["damping_value"].values[0]
@@ -1855,7 +2160,7 @@ class ModalResults(Results):
                 "speed": f"Speed = {speed[0]:.2f}",
             }
 
-            shape = self.shapes[mode, i]
+            shape = self.shapes[mode - 1, i]
             fig = shape.plot_2d(
                 fig=fig, 
                 orientation=orientation,
@@ -1866,7 +2171,7 @@ class ModalResults(Results):
                 title = ""
 
             mode_type = (
-                f"whirl: {self.whirl_direction(rotor=i)[mode]}"
+                f"whirl: {self.whirl_direction(rotor=i)[mode - 1]}"
                 if shape.mode_type == "Lateral"
                 else f"{shape.mode_type} mode"
             )
@@ -1888,6 +2193,130 @@ class ModalResults(Results):
         )
 
         return fig
+    
+
+    def plot_mode_deviation_2d(
+        self,
+        mode=None,
+        fig=None,
+        frequency_type="wd",
+        title=None,
+        length_units="m",
+        frequency_units="rad/s",
+        damping_parameter="log_dec",
+        start_indices=None,
+        **kwargs,
+    ):
+        """Plot (2D view) of the relative displacements of a certain mode.
+
+        Parameters
+        ----------
+        mode : int
+            The n'th vibration mode, :math:`n \\in [1, number_of_modes]`.
+        fig : Plotly graph_objects.Figure()
+            The figure object with the plot.
+        frequency_type : str, optional
+            "wd" calculates the damped natural frequencies.
+            "wn" calculates the undamped natural frequencies.
+            Defaults is "wd".
+        title : str, optional
+            A brief title to the mode shape plot, it will be displayed above other
+            relevant data in the plot area. It does not modify the figure layout from
+            Plotly.
+        length_units : str, optional
+            length units.
+            Default is 'm'.
+        frequency_units : str, optional
+            Frequency units that will be used in the plot title.
+            Default is rad/s.
+        damping_parameter : str, optional
+            Define which value to show for damping. We can use "log_dec" or "damping_ratio".
+            Default is "log_dec".
+        start_indices : list, optional
+            List of start indices for each rotor in a multirotor system.
+        kwargs : optional
+            Additional key word arguments can be passed to change the plot layout only
+            (e.g. width=1000, height=800, ...).
+            *See Plotly Python Figure Reference for more information.
+
+        Returns
+        -------
+        fig : Plotly graph_objects.Figure()
+            The figure object with the plot.
+        """
+        number_of_rotors = self.shapes.shape[1]
+        if fig is None:
+            fig = go.Figure()
+
+        layout_dict = dict()
+        kwargs_dict = {'margin': {'b': 60, 'l': 40, 'r': 40, 't': 60}}             
+        fig.update_layout(layout_dict, overwrite=True, **kwargs_dict)
+
+        if start_indices is None:
+            avg_node_length = Q_(np.mean(np.diff(self.nodes_pos)), 'm')
+        else:
+            node_positions_split = []
+            for i in range(number_of_rotors):
+                np.append(node_positions_split, np.diff(self.nodes_pos[start_indices[i]: start_indices[i+1] if i < number_of_rotors -1 else None]))
+            avg_node_length = Q_(np.mean(node_positions_split), 'm')
+        
+        for i in range(number_of_rotors):
+
+            df = self.data_mode(mode - 1, length_units, frequency_units, damping_parameter, rotor=i)
+
+            damping_name = df["damping_name"].values[0]
+            damping_value = df["damping_value"].values[0]
+
+            
+
+            wd = df["wd"].values
+            wn = df["wn"].values
+            speed = df["speed"].values
+
+            frequency = {
+                "wd": f"ω<sub>d</sub> = {wd[0]:.2f}",
+                "wn": f"ω<sub>n</sub> = {wn[0]:.2f}",
+                "speed": f"Speed = {speed[0]:.2f}",
+            }
+
+            shape = self.shapes[mode - 1, i]
+            fig = shape.plot_deviation_2d(
+                avg_node_length=avg_node_length,
+                rotor_index=i,
+                fig=fig,
+                )
+
+            if title is None:
+                title = ""
+
+            mode_type = (
+                f"whirl: {self.whirl_direction(rotor=i)[mode - 1]}"
+                if shape.mode_type == "Lateral"
+                else f"{shape.mode_type} mode"
+            )
+
+        fig.update_layout(
+            title=dict(
+                text=(
+                    f"{title}<br>"
+                    f"Mode {mode} | "
+                    f"{frequency['speed']} {frequency_units} | "
+                    f"{mode_type} | "
+                    f"{frequency[frequency_type]} {frequency_units} | "
+                    f"{damping_name} = {damping_value:.2f}"
+                ),
+                x=0.5,
+                xanchor="center",
+            ),
+            **kwargs,
+        )
+
+        fig.update_layout(
+            xaxis_title="Node postion ({})".format(length_units),
+            yaxis_title="||X, Y|| ({})".format(length_units),
+        )
+
+        return fig
 
     def plot_orbit(
         self,
@@ -1906,7 +2335,7 @@ class ModalResults(Results):
         Parameters
         ----------
         mode : int
-            The n'th vibration mode
+            The n'th vibration mode, :math:`n \\in [1, number_of_modes]`.
             Default is None
         nodes : int, list(ints)
             Int or list of ints with the nodes selected to be plotted.
@@ -1968,10 +2397,10 @@ class ModalResults(Results):
         col = 1
         for i, n in enumerate(nodes):
             for j in range(number_of_rotors):
-                if n in self.shapes[mode, j].nodes:
+                if n in self.shapes[mode - 1, j].nodes:
                     rotor_number.append(j)
 
-            shape = self.shapes[mode, rotor_number[i]]
+            shape = self.shapes[mode - 1, rotor_number[i]]
             fig = shape.plot_orbit([n], 
                                 fig=fig, 
                                 row=row, 
@@ -4028,7 +4457,7 @@ class ForcedResponseResults(Results):
             ),
         )
         fig.update_yaxes(
-            title_text=f"Major Axis Amplitude ({amplitude_units})",
+            title_text=f"Major Axis Amplitude ({amplitude_units})", col=col,
         )
         fig.update_layout(**kwargs)
 
@@ -4345,8 +4774,8 @@ class ForcedResponseResults(Results):
                 row=i + 1, col=col
             )
 
-        fig.update_xaxes(title_text=f"Rotor Length ({rotor_length_units})")
-        fig.update_yaxes(title_text=f"Bending Moment ({moment_units})")
+        fig.update_xaxes(title_text=f"Rotor Length ({rotor_length_units})", row=number_of_rotors, col=col)
+        fig.update_yaxes(title_text=f"Bending Moment ({moment_units})", col=col)
         fig.update_layout(
             legend=dict(
                 orientation="h",
