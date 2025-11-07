@@ -9,6 +9,7 @@ from plotly import graph_objects as go
 from ross.units import Q_
 
 from ross.disk_element import DiskElement, DiskElement6DoF
+from ross.materials import steel
 
 
 __all__ = ["GearElement", "GearElement6DoF"]
@@ -29,6 +30,14 @@ class GearElement(DiskElement):
         Diametral moment of inertia.
     Ip : float, pint.Quantity
         Polar moment of inertia.
+    material: ross.Material, optional
+        Disk material. Default is steel.
+    di : float, pint.Quantity, optional
+        Inner diameter. If not provided, it will be calculated from mass and inertia.
+    do : float, pint.Quantity, optional
+        Outer diameter. If not provided, it will be calculated from mass and inertia.
+    width : float, pint.Quantity, optional
+        Disk width. If not provided, it will be calculated from mass and inertia
     N: int, optional
         Number of theeth.
         Default is -1.
@@ -72,6 +81,10 @@ class GearElement(DiskElement):
         m,
         Id,
         Ip,
+        material=steel,
+        di=None,
+        do=None,
+        width=None,
         N=-1,
         pitch_diameter=None,
         base_diameter=None,
@@ -95,7 +108,11 @@ class GearElement(DiskElement):
                 "At least one of the following must be informed for GearElement: base_diameter or pitch_diameter"
             )
 
-        super().__init__(n, m, Id, Ip, tag, scale_factor, color)
+        super().__init__(n, m, Id, Ip,
+                         material=material, 
+                         di=di, do=do, width=width, 
+                         tag=tag, scale_factor=scale_factor, 
+                         color=color)
 
     @classmethod
     def from_geometry(
@@ -192,7 +209,11 @@ class GearElement(DiskElement):
             m,
             Id,
             Ip,
-            N,
+            material=material,
+            di=i_d,
+            do=o_d,
+            width=width,
+            N=N,
             pitch_diameter=o_d,
             pressure_angle=pressure_angle,
             tag=tag,
@@ -298,6 +319,14 @@ class GearElement6DoF(DiskElement6DoF):
         Diametral moment of inertia.
     Ip : float, pint.Quantity
         Polar moment of inertia.
+    material: ross.Material, optional
+        Disk material. Default is steel.
+    di : float, pint.Quantity, optional
+        Inner diameter. If not provided, it will be calculated from mass and inertia.
+    do : float, pint.Quantity, optional
+        Outer diameter. If not provided, it will be calculated from mass and inertia.
+    width : float, pint.Quantity, optional
+        Disk width. If not provided, it will be calculated from mass and inertia.
     N: int, optional
         Number of theeth.
         Default is -1.
@@ -344,6 +373,10 @@ class GearElement6DoF(DiskElement6DoF):
         m,
         Id,
         Ip,
+        material=steel,
+        di=None,
+        do=None,
+        width=None,
         N=-1,
         pitch_diameter=None,
         base_diameter=None,
@@ -380,7 +413,10 @@ class GearElement6DoF(DiskElement6DoF):
                 "At least one of the following must be informed for GearElement: base_diameter or pitch_diameter"
             )
 
-        super().__init__(n, m, Id, Ip, tag, scale_factor, color)
+        super().__init__(n, m, Id, Ip, 
+                         material=material, di=di, do=do, 
+                         width=width, tag=tag, 
+                         scale_factor=scale_factor, color=color)
 
     @classmethod
     def from_geometry(
@@ -484,7 +520,11 @@ class GearElement6DoF(DiskElement6DoF):
             m,
             Id,
             Ip,
-            N,
+            material=material,
+            di=i_d,
+            do=o_d,
+            width=width,
+            N=N,
             pitch_diameter=o_d,
             pressure_angle=pressure_angle,
             helical_pitch=helical_pitch,
@@ -512,24 +552,30 @@ class GearElement6DoF(DiskElement6DoF):
         """
 
         zpos, ypos, yc_pos, scale_factor = position
-        scale_factor *= 2
-        radius = min(self.base_radius * 1.1 + 0.05, 1)
+        if scale_factor is None:
+            z_upper = [zpos + self.w / 2, zpos + self.w / 2, zpos - self.w / 2, zpos - self.w / 2]
+            y_upper = [ypos, ypos + self.do / 2, ypos + self.do / 2, ypos]
+            z_lower = z_upper
+            y_lower = [-y for y in y_upper]
+        else:
+            scale_factor *= 2
+            radius = min(self.base_radius * 1.1 + 0.05, 1)
 
-        z_upper = [
-            zpos + scale_factor / 25,
-            zpos + scale_factor / 25,
-            zpos - scale_factor / 25,
-            zpos - scale_factor / 25,
-        ]
-        y_upper = [ypos, ypos + radius, ypos + radius, ypos]
+            z_upper = [
+                zpos + scale_factor / 25,
+                zpos + scale_factor / 25,
+                zpos - scale_factor / 25,
+                zpos - scale_factor / 25,
+            ]
+            y_upper = [ypos, ypos + radius, ypos + radius, ypos]
 
-        z_lower = [
-            zpos + scale_factor / 25,
-            zpos + scale_factor / 25,
-            zpos - scale_factor / 25,
-            zpos - scale_factor / 25,
-        ]
-        y_lower = [-ypos, -ypos - radius, -ypos - radius, -ypos]
+            z_lower = [
+                zpos + scale_factor / 25,
+                zpos + scale_factor / 25,
+                zpos - scale_factor / 25,
+                zpos - scale_factor / 25,
+            ]
+            y_lower = [-ypos, -ypos - radius, -ypos - radius, -ypos]
 
         z_pos = z_upper
         z_pos.append(None)

@@ -146,7 +146,7 @@ class MultiRotor(Rotor):
         gear1_plot = next(
             (
                 elm
-                for elm in R1.plot_rotor().data
+                for elm in R1.plot_rotor(scaling=False).data
                 if elm["legendgroup"] == "gears"
                 and int(search(r"Gear Node: (\d+)", elm.text).group(1)) == gear_1.n
             ),
@@ -156,7 +156,7 @@ class MultiRotor(Rotor):
         gear2_plot = next(
             (
                 elm
-                for elm in R2.plot_rotor().data
+                for elm in R2.plot_rotor(scaling=False).data
                 if elm["legendgroup"] == "gears"
                 and int(search(r"Gear Node: (\d+)", elm.text).group(1)) == gear_2.n
             ),

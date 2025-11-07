@@ -5,16 +5,16 @@ attached to the rotor shaft, which add mainly mass and inertia to the system.
 There're 2 options, an element with 4 or 6 degrees of freedom.
 """
 
-import os
-from pathlib import Path
-
 import numpy as np
+from sympy.solvers import solve
+from sympy import var, Eq 
 import toml
 from plotly import graph_objects as go
 
 from ross.element import Element
 from ross.units import check_units
 from ross.utils import read_table_file
+from ross.materials import steel
 
 __all__ = ["DiskElement", "DiskElement6DoF"]
 
@@ -34,6 +34,14 @@ class DiskElement(Element):
         Diametral moment of inertia.
     Ip : float, pint.Quantity
         Polar moment of inertia
+    material: ross.Material, optional
+        Disk material. Default is steel.
+    di : float, pint.Quantity, optional
+        Inner diameter. If not provided, it will be calculated from mass and inertia.
+    do : float, pint.Quantity, optional
+        Outer diameter. If not provided, it will be calculated from mass and inertia.
+    width : float, pint.Quantity, optional
+        Disk width. If not provided, it will be calculated from mass and inertia
     tag : str, optional
         A tag to name the element
         Default is None
@@ -56,7 +64,7 @@ class DiskElement(Element):
     """
 
     @check_units
-    def __init__(self, n, m, Id, Ip, tag=None, scale_factor=1.0, color="Firebrick"):
+    def __init__(self, n, m, Id, Ip, material=steel, di=None, do=None, width=None, tag=None, scale_factor=1.0, color="Firebrick"):
         self.n = int(n)
         self.n_l = n
         self.n_r = n
@@ -68,6 +76,26 @@ class DiskElement(Element):
         self.color = color
         self.scale_factor = scale_factor
         self.dof_global_index = None
+        self.material = material
+        if any([el is None for el in [di, do, width]]):
+            print("Calculating disk geometry from mass and inertia...")
+            d_i, d_o, w = var('d_i, d_o, w', real=True, positive=True)
+            eq1 = Eq(1/8 * m * (d_o**2 + d_i**2), Ip)
+            eq2 = Eq(self.material.rho * np.pi * w * (d_o**2 - d_i**2) / 4, m)
+            eq3 = Eq(1/2 * Ip + 1/12 * m * w**2, Id)
+            eq4 = d_o > d_i
+            sol = solve([eq1, eq2, eq3], [d_i, d_o, w], dict=True)
+            if len(sol) == 0:
+                raise ValueError("Impossible to calculate disk geometry with the given parameters.")
+            elif len(sol) > 1:
+                raise ValueError("Multiple solutions found when calculating disk geometry.")
+            di = sol[0][d_i]
+            do = sol[0][d_o]
+            width = sol[0][w]
+        self.di = di
+        self.do = do
+        self.w = width
+
 
     def __eq__(self, other):
         """Equality method for comparasions.
@@ -132,6 +160,7 @@ class DiskElement(Element):
             f"(Id={self.Id:{0}.{5}}, Ip={self.Ip:{0}.{5}}, "
             f"m={self.m:{0}.{5}}, color={self.color!r}, "
             f"n={self.n}, scale_factor={self.scale_factor}, tag={self.tag!r})"
+            f"di={self.di:{0}.{5}}, do={self.do:{0}.{5}}, width={self.w:{0}.{5}}"
         )
 
     def __str__(self):
@@ -149,6 +178,9 @@ class DiskElement(Element):
         Mass           (kg):      32.0
         Diam. inertia  (kg*m**2): 0.223
         Polar. inertia (kg*m**2): 0.31223
+        di             (m):       0.0
+        do             (m):       0.0
+        width          (m):       0.0
         """
         return (
             f"Tag:                      {self.tag}"
@@ -156,6 +188,9 @@ class DiskElement(Element):
             f"\nMass           (kg):      {self.m:{2}.{5}}"
             f"\nDiam. inertia  (kg*m**2): {self.Id:{2}.{5}}"
             f"\nPolar. inertia (kg*m**2): {self.Ip:{2}.{5}}"
+            f"\ndi             (m):       {self.di:{2}.{5}}"
+            f"\ndo             (m):       {self.do:{2}.{5}}"
+            f"\nwidth          (m):       {self.w:{2}.{5}}"
         )
 
     def __hash__(self):
@@ -312,14 +347,20 @@ class DiskElement(Element):
             The figure object which traces are added on.
         """
         zpos, ypos, yc_pos, scale_factor = position
-        radius = scale_factor / 8
+        if scale_factor is None:
+            z_upper = [zpos, zpos + self.w / 2, zpos - self.w / 2, zpos]
+            y_upper = [y_pos, y_pos + self.do / 2, y_pos + self.do / 2, y_pos]
+            z_lower = z_upper
+            y_lower = [-y for y in y_upper]
+        else:
+            radius = scale_factor / 8
 
-        # coordinates to plot disks elements
-        z_upper = [zpos, zpos + scale_factor / 25, zpos - scale_factor / 25, zpos]
-        y_upper = [ypos, ypos + 2 * scale_factor, ypos + 2 * scale_factor, ypos]
+            # coordinates to plot disks elements
+            z_upper = [zpos, zpos + scale_factor / 25, zpos - scale_factor / 25, zpos]
+            y_upper = [ypos, ypos + 2 * scale_factor, ypos + 2 * scale_factor, ypos]
 
-        z_lower = [zpos, zpos + scale_factor / 25, zpos - scale_factor / 25, zpos]
-        y_lower = [-ypos, -ypos - 2 * scale_factor, -ypos - 2 * scale_factor, -ypos]
+            z_lower = [zpos, zpos + scale_factor / 25, zpos - scale_factor / 25, zpos]
+            y_lower = [-ypos, -ypos - 2 * scale_factor, -ypos - 2 * scale_factor, -ypos]
 
         z_pos = z_upper
         z_pos.append(None)
@@ -457,7 +498,11 @@ class DiskElement(Element):
 
         tag = tag
 
-        return cls(n, m, Id, Ip, tag, scale_factor, color)
+        return cls(n, m, Id, Ip, 
+                   material=material, 
+                   do=o_d, d_i=i_d, 
+                   width=width, tag=tag, 
+                   scale_factor=scale_factor, color=color)
 
     @classmethod
     def from_table(cls, file, sheet_name=0, tag=None, scale_factor=None, color=None):
@@ -790,3 +835,6 @@ if __name__ == "__main__":
 
     dsk6d = disk_example_6dof()
     print("Disk 6DOF: ", dsk6d)
+
+    dskBenchmark = DiskElement6DoF(0, 147.2150318, 2.514923460, 4.784488534, material=steel) # rho = 7810 / d_i = 0.1 / d_o = 0.5 / width = 0.1
+    print("Disk Benchmark 6DOF: ", dskBenchmark) 

@@ -2391,7 +2391,7 @@ class Rotor(object):
             lti = self._lti(speed)
             return signal.lsim(lti, F, t, X0=ic)
 
-    def plot_rotor(self, nodes=1, check_sld=False, length_units="m", **kwargs):
+    def plot_rotor(self, nodes=1, check_sld=False, length_units="m", scaling=False, **kwargs):
         """Plot a rotor object.
 
         This function will take a rotor object and plot its elements representation
@@ -2408,6 +2408,9 @@ class Rotor(object):
         length_units : str, optional
             length units to length and diameter.
             Default is 'm'.
+        scaling : bool, optional
+            If True, the rotor will be plotted with scaled dimensions for better visualization.
+            Default is False.
         kwargs : optional
             Additional key word arguments can be passed to change the plot layout only
             (e.g. width=1000, height=800, ...).
@@ -2494,27 +2497,30 @@ class Rotor(object):
 
             position = (z_pos, yc_pos)
             fig = sh_elm._patch(position, check_sld, fig, length_units)
-
+        
         mean_od = np.mean(nodes_o_d)
         # plot disk elements
 
         # calculate scale factor if disks have scale_factor='mass'
         if self.disk_elements:
-            scaled_disks = [
-                disk for disk in self.disk_elements if disk.scale_factor == "mass"
-            ]
-            if scaled_disks:
-                max_mass = max([disk.m for disk in scaled_disks])
-                for disk in scaled_disks:
-                    f = disk.m / max_mass
-                    disk._scale_factor_calculated = (1 - f) * 0.5 + f * 1.0
+            if scaling:
+                scaled_disks = [
+                    disk for disk in self.disk_elements if disk.scale_factor == "mass"
+                ]
+                if scaled_disks:
+                    max_mass = max([disk.m for disk in scaled_disks])
+                    for disk in scaled_disks:
+                        f = disk.m / max_mass
+                        disk._scale_factor_calculated = (1 - f) * 0.5 + f * 1.0
 
             for disk in self.disk_elements:
                 scale_factor = disk.scale_factor
                 if scale_factor == "mass":
                     scale_factor = disk._scale_factor_calculated
-                step = scale_factor * mean_od
-
+                if scaling:
+                    step = scale_factor * mean_od
+                else:
+                    step = None
                 z_pos = (
                     Q_(self.df[self.df.tag == disk.tag]["nodes_pos_l"].values[0], "m")
                     .to(length_units)
@@ -2525,6 +2531,7 @@ class Rotor(object):
                     .to(length_units)
                     .m
                 )
+
                 yc_pos = center_line_pos[self.nodes.index(disk.n)]
                 position = (z_pos, y_pos, yc_pos, step)
                 fig = disk._patch(position, fig)
