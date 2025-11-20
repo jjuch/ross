@@ -584,6 +584,14 @@ class DiskElement6DoF(DiskElement):
         Diametral moment of inertia.
     Ip : float, pint.Quantity
         Polar moment of inertia
+    material: ross.Material, optional
+        Disk material. Default is steel.
+    di : float, pint.Quantity, optional
+        Inner diameter. If not provided, it will be calculated from mass and inertia.
+    do : float, pint.Quantity, optional
+        Outer diameter. If not provided, it will be calculated from mass and inertia.
+    width : float, pint.Quantity, optional
+        Disk width. If not provided, it will be calculated from mass and inertia
     tag : str, optional
         A tag to name the element
         Default is None

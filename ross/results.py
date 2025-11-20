@@ -190,7 +190,9 @@ class Orbit(Results):
     r"""Class used to construct orbits for a node in a mode or deflected shape.
 
     The matrix H contains information about the whirl direction,
-    the orbit minor and major axis and the orbit inclination.
+    the orbit minor and major axis and the orbit inclination. Typically, 
+    the orbit resorts to the xy-plane, but there is an option to include 
+    a z component.
     The matrix is calculated by :math:`H = T.T^T` where the
     matrix T is constructed using the eigenvector corresponding
     to the natural frequency of interest:
@@ -200,18 +202,21 @@ class Orbit(Results):
        \begin{eqnarray}
           \begin{bmatrix}
           u(t)\\
-          v(t)
+          v(t)\\
+          w(t)
           \end{bmatrix}
           = \mathfrak{R}\Bigg(
           \begin{bmatrix}
           r_u e^{j\eta_u}\\
-          r_v e^{j\eta_v}
+          r_v e^{j\eta_v}\\
+          r_w e^{j\eta_w}
           \end{bmatrix}\Bigg)
           e^{j\omega_i t}
           =
           \begin{bmatrix}
           r_u cos(\eta_u + \omega_i t)\\
-          r_v cos(\eta_v + \omega_i t)
+          r_v cos(\eta_v + \omega_i t)\\
+          r_w cos(\eta_w + \omega_i t)
           \end{bmatrix}
           = {\bf T}
           \begin{bmatrix}
@@ -220,7 +225,7 @@ class Orbit(Results):
           \end{bmatrix}
        \end{eqnarray}
 
-    Where :math:`r_u e^{j\eta_u}` e :math:`r_v e^{j\eta_v}` are the
+    Where :math:`r_u e^{j\eta_u}`, :math:`r_v e^{j\eta_v}`, and :math:`r_w e^{j\eta_w}` are the
     elements of the *i*\th eigenvector, corresponding to the node and
     natural frequency of interest (mode).
 
@@ -229,7 +234,8 @@ class Orbit(Results):
         {\bf T} =
         \begin{bmatrix}
         r_u cos(\eta_u) & -r_u sin(\eta_u)\\
-        r_u cos(\eta_u) & -r_v sin(\eta_v)
+        r_v cos(\eta_v) & -r_v sin(\eta_v)\\
+        r_w cos(\eta_w) & -r_w sin(\eta_w)
         \end{bmatrix}
 
 
@@ -241,21 +247,32 @@ class Orbit(Results):
         Element in the vector corresponding to the x direction.
     rv_e : complex
         Element in the vector corresponding to the y direction.
+    rw_e : complex, optional
+        Element in the vector corresponding to the z direction. 
+        Default is None.
     """
 
-    def __init__(self, *, node, node_pos, ru_e, rv_e):
+    def __init__(self, *, node, node_pos, ru_e, rv_e, rw_e=None):
         self.node = node
         self.node_pos = node_pos
         self.ru_e = ru_e
         self.rv_e = rv_e
+        self.xy_plane = False  # orbit in xy plane
+        if rw_e is None:
+            self.xy_plane = True
+            self.rw_e = 0.0 + 0.0j
+        else:
+            self.rw_e = rw_e
 
         # data for plotting
         num_points = 360
         c = np.linspace(0, 2 * np.pi, num_points)
         circle = np.exp(1j * c)
 
-        self.x_circle = np.real(ru_e * circle)
+        self.x_circle = np.real(ru_e * circle) 
         self.y_circle = np.real(rv_e * circle)
+        self.z_circle = np.real(self.rw_e * circle)
+
         angle = np.arctan2(self.y_circle, self.x_circle)
         angle[angle < 0] = angle[angle < 0] + 2 * np.pi
         self.angle = angle
@@ -266,29 +283,42 @@ class Orbit(Results):
         )
         self.major_x = self.x_circle[self.major_index]
         self.major_y = self.y_circle[self.major_index]
+        self.major_z = self.z_circle[self.major_index]
         self.major_angle = self.angle[self.major_index]
         self.minor_angle = self.major_angle + np.pi / 2
 
         # calculate T matrix
         ru = np.absolute(ru_e)
         rv = np.absolute(rv_e)
+        rw = np.absolute(self.rw_e)
 
         nu = np.angle(ru_e)
         nv = np.angle(rv_e)
+        nw = np.angle(self.rw_e)
         self.nu = nu
         self.nv = nv
+        self.nw = nw
+
         # fmt: off
         T = np.array([[ru * np.cos(nu), -ru * np.sin(nu)],
-                      [rv * np.cos(nv), -rv * np.sin(nv)]])
+                      [rv * np.cos(nv), -rv * np.sin(nv)],
+                      [rw * np.cos(nw), -rw * np.sin(nw)]])
         # fmt: on
         H = T @ T.T
 
-        lam = la.eig(H)[0]
-        # lam is the eigenvalue -> sqrt(lam) is the minor/major axis.
-        # kappa encodes the relation between the axis and the precession.
-        minor = np.sqrt(lam.min())
-        major = np.sqrt(lam.max())
+        lam, _evec = la.eig(H)
+        # Sort eigenvalues and eigenvectors in descending order
+        idx = np.argsort(lam)[::-1]
+        lam = lam[idx]
+        _evec = _evec[:, idx]
 
+        # lam is the eigenvalue, they should all be real and one is zero (perpendicular to the plane of the ellipse).
+        # -> sqrt(lam) is the minor/major axis.
+        # kappa encodes the relation between the axis and the precession.
+        major = np.sqrt(lam[0])
+        minor = np.sqrt(lam[1])
+
+        # As it is not a purely axial mode, the whirl direction is defined by the phase difference between nu and nv.
         diff = nv - nu
 
         # we need to evaluate if 0 < nv - nu < pi.
@@ -305,6 +335,12 @@ class Orbit(Results):
             kappa = -minor / major
         else:
             kappa = minor / major
+        
+        
+        # Orientation vectors
+        self.major_dir = _evec[:, 0]
+        self.minor_dir = _evec[:, 1]
+        self.normal_dir = _evec[:, 2]
 
         self.minor_axis = np.real(minor)
         self.major_axis = np.real(major)
@@ -344,15 +380,29 @@ class Orbit(Results):
 
     def plot_orbit(self, fig=None, major_axis=False, middle_point=False, row=1, col=1):
         if fig is None:
-            fig = make_subplots(rows=row, cols=col)
+            fig = make_subplots(rows=row, cols=col, specs=[[{'type': 'scatter3d'}]*col] * row)
 
         xc = self.x_circle
         yc = self.y_circle
+        zc = self.z_circle
 
         fig.add_trace(
-            go.Scatter(
+            go.Scatter3d(
+                x=xc,
+                y=yc,
+                z=[0] * len(xc),
+                mode="lines",
+                line=dict(color='gray', dash='dash'),
+                name=f"node {self.node}<br>{self.whirl}",
+                showlegend=False,
+            ), row=row, col=col
+        )
+
+        fig.add_trace(
+            go.Scatter3d(
                 x=xc[:-10],
                 y=yc[:-10],
+                z=zc[:-10],
                 mode="lines",
                 line=dict(color=self.color),
                 name=f"node {self.node}<br>{self.whirl}",
@@ -361,9 +411,10 @@ class Orbit(Results):
         )
 
         fig.add_trace(
-            go.Scatter(
+            go.Scatter3d(
                 x=[xc[0]],
                 y=[yc[0]],
+                z=[zc[0]],
                 mode="markers",
                 marker=dict(color=self.color),
                 name="node {}".format(self.node),
@@ -374,9 +425,10 @@ class Orbit(Results):
         if major_axis:
             # add orbit major axis marker
             fig.add_trace(
-                go.Scatter(
+                go.Scatter3d(
                     x=[self.major_x],
                     y=[self.major_y],
+                    z=[self.major_z],
                     mode="markers",
                     marker=dict(
                         color="black", symbol="cross", size=4, line_width=2
@@ -402,11 +454,13 @@ class Orbit(Results):
             # add orbit's middle point
             x_mp = (max(xc) - min(xc))/2 + min(xc)
             y_mp = (max(yc) - min(yc))/2 + min(yc)
+            z_mp = (max(zc) - min(zc))/2 + min(zc)
 
             fig.add_trace(
-                go.Scatter(
+                go.Scatter3d(
                     x=[x_mp],
                     y=[y_mp],
+                    z=[z_mp],
                     mode="markers",
                     marker=dict(
                         color="green", symbol="cross", size=4, line_width=2
@@ -521,12 +575,12 @@ class Shape(Results):
             
 
 
-    def _calculate_orbits(self):
+    def _calculate_orbits(self, ):
         orbits = []
         whirl = []
         for node, node_pos in zip(self.nodes, self.nodes_pos):
-            ru_e, rv_e = self._evec[self.number_dof * node : self.number_dof * node + 2]
-            orbit = Orbit(node=node, node_pos=node_pos, ru_e=ru_e, rv_e=rv_e)
+            ru_e, rv_e, rw_e = self._evec[self.number_dof * node : self.number_dof * node + 3]
+            orbit = Orbit(node=node, node_pos=node_pos, ru_e=ru_e, rv_e=rv_e, rw_e=rw_e)
             orbits.append(orbit)
             whirl.append(orbit.whirl)
 
@@ -656,7 +710,8 @@ class Shape(Results):
         """
         # only perform calculation if necessary
         if fig is None:
-            fig = make_subplots(rows=row, cols=col)
+            fig = make_subplots(rows=row, cols=col,
+                                specs=[[{'type': 'scatter3d'}] * col] * row)
 
         selected_orbits = [orbit for orbit in self.orbits if orbit.node in nodes]
 
@@ -1269,9 +1324,15 @@ class Shape(Results):
                     .to(length_units)
                     .m
                 )
+                zc_orbit = (
+                    Q_(zc_pos + orbit.z_circle, "m")
+                    .to(length_units)
+                    .m
+                )
+
                 fig.add_trace(
                     go.Scatter3d(
-                        x=zc_pos[:-10],
+                        x=zc_orbit[:-10],
                         y=orbit.x_circle[:-10],
                         z=orbit.y_circle[:-10],
                         mode="lines",
@@ -1281,14 +1342,27 @@ class Shape(Results):
                         hovertemplate=(
                             "Nodal Position: %{x:.2f}<br>"
                             + "X - Displacement: %{y:.2e}<br>"
-                            + "Y - Displacement: %{z:.2e}"
+                            + "Y - Displacement: %{z:.2e}<br>"
+                            + "Z - Displacement: %{x:.2e}"
                         ),
                     ), row=row, col=col
                 )
+                if not orbit.xy_plane:
+                    fig.add_trace(
+                        go.Scatter3d(
+                            x=zc_pos[:-10],
+                            y=orbit.x_circle[:-10],
+                            z=orbit.y_circle[:-10],
+                            mode="lines",
+                            line=dict(color='gray', dash='dot'),
+                            name="node {}".format(orbit.node),
+                            showlegend=False,
+                        ), row=row, col=col
+                    )
                 # add orbit start
                 fig.add_trace(
                     go.Scatter3d(
-                        x=[zc_pos[0]],
+                        x=[zc_orbit[0]],
                         y=[orbit.x_circle[0]],
                         z=[orbit.y_circle[0]],
                         mode="markers",
@@ -1305,7 +1379,7 @@ class Shape(Results):
                 # add orbit major axis marker
                 fig.add_trace(
                     go.Scatter3d(
-                        x=[zc_pos[0]],
+                        x=[zc_pos[0] + orbit.major_z],
                         y=[orbit.major_x],
                         z=[orbit.major_y],
                         mode="markers",
@@ -1373,6 +1447,18 @@ class Shape(Results):
                 ), row=row, col=col
             )
 
+        y = orbit.x_circle[:-10]
+        z = orbit.y_circle[:-10]
+        range_y = max(y) - min(y)
+        range_z = max(z) - min(z)
+        max_range = max(range_y, range_z)
+
+        center_y = (max(y) + min(y)) / 2
+        center_z = (max(z) + min(z)) / 2
+        y_range = [center_y - max_range / 2, center_y + max_range / 2]
+        z_range = [center_z - max_range / 2, center_z + max_range / 2]
+
+
         fig.update_scenes(
             dict(
                 aspectratio=dict(x=2.5, y=1, z=1),
@@ -1384,6 +1470,8 @@ class Shape(Results):
                 xaxis_title=f"Rotor Length ({length_units})",
                 yaxis_title="X - Displacement",
                 zaxis_title="Y - Displacement",
+                yaxis=dict(range=y_range),
+                zaxis=dict(range=z_range),
             ),
             row=row, col=col,
             **kwargs,
@@ -1561,6 +1649,8 @@ class ModalResults(Results):
         List of nodes positions.
     shaft_elements_length : list
         List with Rotor shaft elements lengths.
+    normalize : bool, optional
+        If True, mode shapes are normalized. Default is True.
     """
 
     def __init__(
@@ -1577,7 +1667,8 @@ class ModalResults(Results):
         nodes_pos,
         shaft_elements_length,
         number_dof,
-        start_nodes_multirotor
+        start_nodes_multirotor,
+        normalize=True,
     ):
         self.speed = speed
         self.evalues = evalues
@@ -1592,8 +1683,8 @@ class ModalResults(Results):
         self.shaft_elements_length = shaft_elements_length
         self.number_dof = number_dof
         self.start_nodes_multirotor=start_nodes_multirotor
-        self.update_mode_shapes()
-
+        self.normalized=normalize
+        # self.update_mode_shapes(normalize=normalize) ## DEPRECATED, now included in the normalized setter
 
     def __str__(self):
         # Get whirl direction for each rotor
@@ -1627,8 +1718,17 @@ class ModalResults(Results):
         final += "--------------------------------------------------------------------------------------------------\n"
             
         return final
-       
-    def update_mode_shapes(self):
+
+    @property
+    def normalized(self):
+        return self._normalized
+    
+    @normalized.setter
+    def normalized(self, normalize):
+        self.update_mode_shapes(normalize=normalize)
+        self._normalized=normalize
+
+    def update_mode_shapes(self, normalize=True):
         self.modes = self.evectors[: self.ndof]
         self.shapes = np.ndarray((len(self.wn), len(self.start_nodes_multirotor)), dtype='object')
         
@@ -1637,15 +1737,15 @@ class ModalResults(Results):
             for i, idx in enumerate(self.start_nodes_multirotor):
                 start_idx = idx
                 stop_idx = None if i == len(self.start_nodes_multirotor) - 1 else self.start_nodes_multirotor[i + 1]
-                
+
                 self.shapes[mode, i] = Shape(
                         vector = self.modes[:, mode],
                         nodes=self.nodes[start_idx:stop_idx],
                         nodes_pos=self.nodes_pos[start_idx:stop_idx],
                         shaft_elements_length=shaft_elements_length[start_idx:None if stop_idx is None else stop_idx - 1],
-                        normalize=True, #TODO: why hardcoded?
+                        normalize=normalize,
                         number_dof=self.number_dof,
-                        start_idx=start_idx
+                        start_idx=start_idx,
                     )
                 
                 shaft_elements_length = np.insert(shaft_elements_length, -1 if stop_idx is None else stop_idx - 1, 0.0)
@@ -1916,7 +2016,6 @@ class ModalResults(Results):
                 "speed": f"Speed = {speed[0]:.2f}",
             }
 
-        
             shape = self.shapes[mode - 1, i]
             fig = shape.plot_3d(
                 length_units=length_units,
@@ -2387,10 +2486,9 @@ class ModalResults(Results):
         if fig is None:
             fig = make_subplots(rows=rows,
                                 cols=cols,
-                                specs=[[{'type': 'scatter'}] * cols] * rows
+                                specs=[[{'type': 'scatter3d'}] * cols] * rows
                                 # subplot_titles=["Rotor {}".format(i + 1) for i in range(number_of_rotors)]
                                 )
-
 
         rotor_number = []
         row = 1

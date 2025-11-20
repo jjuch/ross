@@ -748,7 +748,7 @@ class Rotor(object):
 
     @check_units
     def run_modal(
-        self, speed, num_modes=12, sparse=True, synchronous=False, full=False
+        self, speed, num_modes=12, sparse=True, synchronous=False, full=False, normalize=True
     ):
         """Run modal analysis.
 
@@ -788,6 +788,10 @@ class Rotor(object):
             If True, the size of the result arrays is equal to `num_modes`.
             If False, it is half the value of `num_modes`.
             Default is False.
+        normalize : bool, optional
+            If True, the eigenvectors are normalized such that the largest component
+            of each eigenvector is equal to 1. If False, the eigenvectors are not normalized.
+            Default is True.
 
         Returns
         -------
@@ -836,7 +840,8 @@ class Rotor(object):
             self.nodes_pos,
             self.shaft_elements_length,
             self.number_dof,
-            self.start_nodes_multirotor
+            self.start_nodes_multirotor,
+            normalize=normalize,
         )
 
         return modal_results
