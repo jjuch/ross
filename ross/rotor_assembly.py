@@ -207,10 +207,10 @@ class Rotor(object):
         for i, p_mass in enumerate(point_mass_elements):
             if p_mass.tag is None: # or isMultiRotor:
                 p_mass.tag = p_mass.get_class_name_prefix(i)
-
+        
         self.shaft_elements = sorted(shaft_elements, key=lambda el: el.n)
         self.bearing_elements = sorted(bearing_elements, key=lambda el: el.n)
-        self.disk_elements = disk_elements
+        self.disk_elements = sorted(disk_elements, key=lambda el: el.n)
         self.point_mass_elements = point_mass_elements
         self.elements = [
             el
@@ -472,6 +472,7 @@ class Rotor(object):
             for b in bearing_elements
             if pd.isna(df.loc[df.tag == b.tag, "nodes_pos_l"]).all()
         }
+        
         # cycle while there are bearings without a z location
         for b in cycle(self.bearing_elements):
             if bearings_no_zloc:
@@ -479,6 +480,7 @@ class Rotor(object):
                     # first check if b.n is on list, if not, check for n_link
                     node_l = df.loc[(df.n_l == b.n) & (df.tag != b.tag), "nodes_pos_l"]
                     node_r = df.loc[(df.n_r == b.n) & (df.tag != b.tag), "nodes_pos_r"]
+                    
                     if len(node_l) == 0 and len(node_r) == 0:
                         node_l = df.loc[
                             (df.n_link == b.n) & (df.tag != b.tag), "nodes_pos_l"
@@ -512,6 +514,7 @@ class Rotor(object):
         dfb = df[df.type.isin(classes)]
         z_positions = [pos for pos in dfb["nodes_pos_l"]]
         z_positions = list(dict.fromkeys(z_positions))
+
         for z_pos in z_positions:
             dfb_z_pos = dfb[dfb.nodes_pos_l == z_pos]
             dfb_z_pos = dfb_z_pos.sort_values(by="n_l")
@@ -734,7 +737,7 @@ class Rotor(object):
             shaft_elements.insert(idx_right, right_elem)
 
             prev_left_node = left_elem.n
-
+        
         return Rotor(
             shaft_elements,
             disk_elements=disk_elements,

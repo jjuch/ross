@@ -57,9 +57,12 @@ class DiskElement(Element):
 
     @check_units
     def __init__(self, n, m, Id, Ip, tag=None, scale_factor=1.0, color="Firebrick"):
-        self.n = int(n)
-        self.n_l = n
-        self.n_r = n
+        self.n_l = None
+        self.n_r = None
+        self.n = n
+        # DEPRECATED: change in setter
+        # self.n_l = n
+        # self.n_r = n
 
         self.m = float(m)
         self.Id = float(Id)
@@ -160,6 +163,26 @@ class DiskElement(Element):
 
     def __hash__(self):
         return hash(self.tag)
+    
+
+    @property
+    def n(self):
+        return self._n
+    
+
+    @n.setter
+    def n(self, value):
+        """Node in which the disk is located.
+
+        Parameters
+        ----------
+        value : int
+            Node number.
+        """
+        self._n = int(value)
+        self.n_l = int(value)
+        self.n_r = int(value)
+
 
     def dof_mapping(self):
         """Degrees of freedom mapping.
