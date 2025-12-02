@@ -211,9 +211,10 @@ class MultiRotor(Rotor):
             nodes_pos_l[index] = self.rotors[0].nodes_pos[
                 self.rotors[0].nodes.index(node)
             ]
-        elif node == self.R2_nodes[0]:
-            nodes_pos_l[index] = self.rotors[1].nodes_pos[0] + self.dz_pos
-
+        elif node in self.start_nodes_multirotor:
+            nodes_pos_l[index] = self.rotors[1].nodes_pos[node - self.start_nodes_multirotor[1]] + self.dz_pos
+            
+    
     def _fix_nodes(self):
         self.nodes = [*self.rotors[0].nodes, *self.R2_nodes]
 
